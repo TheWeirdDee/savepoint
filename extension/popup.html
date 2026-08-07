@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- Not signed in -->
+      <section id="login" class="hidden">
+        <p class="title">Sign in to Save Point</p>
+        <p class="muted">Same username and password as the workspace.</p>
+        <label class="muted" for="login-username">Username</label>
+        <input id="login-username" autocomplete="username" />
+        <label class="muted" for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" />
+        <button id="login-submit" class="primary">Log in</button>
+        <p class="error hidden" id="login-error"></p>
+        <p class="muted center" style="margin-top: 14px;">
+          New here? <a href="#" id="open-workspace-signup">Create an account</a>
+        </p>
+        <p class="muted center" style="margin-top: 6px;">
+          <a href="#" id="open-options-link">Workspace not localhost:3000? Change it</a>
+        </p>
+      </section>
+
+      <!-- Ready -->
+      <section id="ready" class="hidden">
+        <p class="title">Save where my brain is</p>
+        <label class="muted" for="note">Add one thought (optional)</label>
+        <input id="note" placeholder="e.g. checking which source is more reliable" />
+        <button id="save" class="primary">Save my place</button>
+        <p class="muted center" style="margin-top: 12px;">
+          <a href="#" id="logout-link">Log out</a>
+        </p>
+      </section>
+
+      <!-- Saving -->
+      <section id="saving" class="hidden">
+        <p class="muted center">Saving…</p>
+      </section>
+
+      <!-- Saved -->
+      <section id="saved" class="hidden">
+        <p class="title">Save point created</p>
+        <p class="muted">Open the Save Point workspace to pick up your thread.</p>
+        <button id="open-workspace" class="ghost">Open workspace</button>
+      </section>
+
+      <!-- Error -->
+      <section id="error" class="hidden">
+        <p class="muted center" id="error-text">Couldn't save. Try once more.</p>
+        <button id="retry" class="ghost">Try again</button>
+      </section>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

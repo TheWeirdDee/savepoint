@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body { width: 420px; }
+      label.field { display: block; margin: 14px 0 4px; font-weight: 700; font-size: 13px; }
+      .saved-note { color: var(--sage); font-weight: 700; font-size: 13px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <p class="title">Save Point settings</p>
+      <p class="muted">
+        Where should this extension save to? Set it once. Signing in happens
+        in the popup, with the same username and password as the workspace.
+      </p>
+
+      <label class="field" for="apiBase">Workspace address</label>
+      <input id="apiBase" placeholder="http://localhost:3000" />
+
+      <button id="save" class="primary">Save settings</button>
+      <p id="savedNote" class="saved-note hidden">Saved.</p>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>

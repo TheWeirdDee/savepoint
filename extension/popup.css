@@ -1,0 +1,105 @@
+:root {
+  --paper: #f7f6f2;
+  --ink: #2a2e2d;
+  --ink-soft: #5c625f;
+  --mist: #eceae3;
+  --line: #dad7ce;
+  --sage: #3a6b63;
+  --marker: #c8823c;
+  --ask: #6b72a6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 320px;
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.wrap {
+  padding: 16px;
+}
+
+.hidden {
+  display: none;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.muted {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.center {
+  text-align: center;
+}
+
+input {
+  width: 100%;
+  padding: 9px 10px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--mist);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+input:focus {
+  outline: 3px solid var(--sage);
+  outline-offset: 1px;
+  border-color: var(--sage);
+}
+
+button {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.primary {
+  background: var(--sage);
+  color: var(--paper);
+}
+
+.primary:hover {
+  opacity: 0.9;
+}
+
+.ghost {
+  background: var(--mist);
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+
+.ghost:hover {
+  color: var(--ink);
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--ask);
+  font-size: 13px;
+}
+
+a {
+  color: var(--sage);
+}

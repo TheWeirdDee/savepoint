@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  ND-first base layer.
+  Accessibility is controlled by classes on <html> (set by AccessibilityBar):
+    .text-lg-user / .text-xl-user   -> larger base font size
+    .spacing-relaxed                -> looser line height + letter spacing
+    .font-dyslexia                  -> swap Atkinson Hyperlegible for Lexend
+    .motion-off                     -> disable all transitions/animations
+  We also honour the OS prefers-reduced-motion setting.
+*/
+
+:root {
+  --paper: #f7f6f2;
+  --paper-2: #efede6;
+  --ink: #23272a;
+  --ink-soft: #5c625f;
+  --mist: #eceae3;
+  --line: #dad7ce;
+  --sage: #3a6b63;
+  --marker: #c8823c;
+  --ask: #6b72a6;
+  --forest: #223b34;
+  --bone: #edeae0;
+  --font-body: var(--font-atkinson), system-ui, sans-serif;
+}
+
+html {
+  font-size: 18px; /* base >= 18px, generous default reading size */
+  scroll-behavior: smooth;
+}
+
+html.text-lg-user {
+  font-size: 20px;
+}
+
+html.text-xl-user {
+  font-size: 22px;
+}
+
+html.font-dyslexia {
+  --font-body: var(--font-lexend), system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--paper);
+  color: var(--ink);
+  line-height: 1.65; /* >= 1.6 */
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html.spacing-relaxed body {
+  line-height: 1.95;
+  letter-spacing: 0.02em;
+  word-spacing: 0.08em;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+/* The shared page container. The ≤640px reading measure (Tailwind's max-w-read)
+   is reserved for restore-card and docs prose ONLY — never applied at the page
+   or layout level, which is what caused the earlier centering bug. */
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: 28px;
+  padding-right: 28px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/* Visible, calm keyboard focus everywhere — a quality floor, not an afterthought. */
+:focus-visible {
+  outline: 3px solid var(--sage);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Reduced motion: honour the OS setting and the manual toggle. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* A gentle entrance for the restore card. Suppressed when motion is off. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 380ms ease-out both;
+}
+
+/* The save-point marker's single gentle pulse (used on the Save confirmation). */
+@keyframes marker-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-marker-pulse {
+  animation: marker-pulse 520ms ease-out both;
+}
+
+/* A slow ambient halo on the landing hero's restore-card mock. Infinite but
+   very subtle — always suppressed under reduced motion / motion-off. */
+@keyframes card-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 130, 60, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(200, 130, 60, 0.1);
+  }
+}
+
+.animate-card-pulse {
+  animation: card-pulse 2.6s ease-in-out infinite;
+}
+
+/* Accordion (FAQ). A pure-CSS grid-rows expand/collapse — no scrollHeight
+   measuring needed. Respects reduced motion via the global rules above. */
+.accordion-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.accordion-content[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.accordion-content > div {
+  overflow: hidden;
+}
+
+/* Textarea reset that stays calm and readable. */
+textarea {
+  font-family: inherit;
+  line-height: inherit;
+}
+
+a {
+  color: inherit;
+}

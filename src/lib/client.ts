@@ -1,0 +1,233 @@
+"use client";
+
+import type {
+  SavePoint,
+  SavePointCapture,
+  ReconstructedState,
+  ReconstructOutcome,
+  ReconstructFailureKind,
+  AuthUser,
+  SignupInput,
+  LoginInput,
+} from "./types";
+import { DEMO_RECONSTRUCTED_STATE } from "./demoFixtures";
+
+// --- Deriving a human label for a save point (rail list, restore offer) ---
+
+function truncate(s: string, max: number): string {
+  const t = s.trim();
+  return t.length <= max ? t : t.slice(0, max).trimEnd() + "…";
+}
+
+// The order matters: prefer what the AI figured out, then what the student
+// said, then what they were looking at, then a preview of what they actually
+// wrote — a document with real content but no title/note is common (people
+// just start typing), and previously this fell all the way through to a bare
+// "Saved session" even when there was plenty to show.
+export function savePointLabel(sp: SavePoint): string {
+  const objective = sp.reconstruction?.objective.text?.trim();
+  if (objective) return objective;
+
+  const note = sp.userNote?.trim();
+  if (note) return note;
+
+  const title = sp.workspaceContext?.documentTitle?.trim();
+  if (title) return title;
+
+  const activeTitle = sp.activeContext?.title?.trim();
+  if (activeTitle) return activeTitle;
+
+  const content = sp.workspaceContext?.documentContent?.trim();
+  if (content) return truncate(content, 72);
+
+  return "Saved session";
+}
+
+// --- Draft document persistence (so the workspace itself survives a reload) ---
+
+const DOC_KEY = "savepoint.doc";
+const DOC_TITLE_KEY = "savepoint.docTitle";
+const LAST_SAVED_DOC_KEY = "savepoint.lastSavedDoc";
+
+export function loadDraft(): { title: string; content: string } {
+  if (typeof window === "undefined") return { title: "", content: "" };
+  return {
+    title: localStorage.getItem(DOC_TITLE_KEY) ?? "",
+    content: localStorage.getItem(DOC_KEY) ?? "",
+  };
+}
+
+export function saveDraft(title: string, content: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DOC_TITLE_KEY, title);
+  localStorage.setItem(DOC_KEY, content);
+}
+
+// Text added since the last save point — a cheap "what were you just doing" signal.
+export function computeRecentEdits(currentContent: string): string {
+  if (typeof window === "undefined") return "";
+  const last = localStorage.getItem(LAST_SAVED_DOC_KEY) ?? "";
+  if (currentContent.startsWith(last)) {
+    return currentContent.slice(last.length).trim();
+  }
+  // If it isn't a clean append, fall back to the tail of the document.
+  return currentContent.slice(-600).trim();
+}
+
+export function markDocSaved(content: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LAST_SAVED_DOC_KEY, content);
+}
+
+// --- Building a workspace capture packet ---
+
+export function buildWorkspaceCapture(
+  title: string,
+  content: string,
+  userNote: string
+): SavePointCapture {
+  return {
+    source: "workspace",
+    userNote: userNote.trim() || undefined,
+    activeContext: {},
+    openTabs: [],
+    workspaceContext: {
+      documentTitle: title.trim() || undefined,
+      documentContent: content.trim() || undefined,
+      recentEdits: computeRecentEdits(content) || undefined,
+    },
+  };
+}
+
+// --- Auth API client (session travels as an httpOnly cookie automatically —
+// "credentials: include" isn't needed for same-origin fetches, but is safe to
+// keep explicit since these calls always run from the workspace's own origin) ---
+
+async function parseJson(res: Response) {
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
+  return data;
+}
+
+export async function signup(input: SignupInput): Promise<AuthUser> {
+  const res = await fetch("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson(res);
+  return data.user as AuthUser;
+}
+
+export async function login(input: LoginInput): Promise<AuthUser> {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson(res);
+  return data.user as AuthUser;
+}
+
+export async function logout(): Promise<void> {
+  await fetch("/api/auth/logout", { method: "POST" });
+}
+
+// --- Save-point API client (identity comes from the session cookie) ---
+
+export async function createSavePoint(
+  capture: SavePointCapture
+): Promise<SavePoint> {
+  const res = await fetch("/api/save-points", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ capture }),
+  });
+  const data = await parseJson(res);
+  return data.savePoint as SavePoint;
+}
+
+export async function listSavePoints(): Promise<{
+  savePoints: SavePoint[];
+  latestUnrestored: SavePoint | null;
+}> {
+  const res = await fetch("/api/save-points");
+  return parseJson(res);
+}
+
+// Demo mode: NEXT_PUBLIC_DEMO_MODE=1 (build-time) or ?demo=1 on /workspace
+// (per-visit) both work. This is the ONLY thing demo mode affects — it never
+// touches save creation, listing, correction, or the database in any way,
+// and it is off unless one of these is explicitly set.
+export function isDemoMode(): boolean {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "1") return true;
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("demo") === "1";
+}
+
+export async function restoreSavePoint(
+  savePointId: string,
+  force = false
+): Promise<ReconstructOutcome> {
+  if (isDemoMode()) {
+    return { ok: true, state: DEMO_RECONSTRUCTED_STATE };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("/api/reconstruct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ savePointId, force }),
+    });
+  } catch {
+    return {
+      ok: false,
+      kind: "network",
+      message: "Couldn't reach the app just now. Try again in a moment.",
+    };
+  }
+
+  let data: {
+    ok?: boolean;
+    state?: ReconstructedState;
+    kind?: ReconstructFailureKind;
+    message?: string;
+    error?: string;
+  };
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, kind: "parse", message: "Got an unexpected response. Try again." };
+  }
+
+  if (data.ok === true && data.state) {
+    return { ok: true, state: data.state };
+  }
+  if (data.ok === false && data.kind) {
+    return { ok: false, kind: data.kind, message: data.message ?? "Something went wrong. Try again." };
+  }
+  // A route error outside the ReconstructOutcome contract (not signed in,
+  // missing savePointId, etc.) — surface it rather than crash the UI.
+  return { ok: false, kind: "network", message: data.error ?? "Something went wrong. Try again." };
+}
+
+// Records a Yes/No confirmation on a flagged decision. Best-effort: the UI
+// already updated optimistically, so a network failure here is silent.
+export async function correctDecision(
+  savePointId: string,
+  decisionIndex: number,
+  wasCorrect: boolean,
+  correctedText?: string
+): Promise<void> {
+  await fetch("/api/save-points", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      savePointId,
+      correction: { decisionIndex, wasCorrect, correctedText },
+    }),
+  }).catch(() => {
+    /* best-effort — the student's own memory is the source of truth here */
+  });
+}
