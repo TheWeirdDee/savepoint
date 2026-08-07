@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { FaqAccordion } from "@/components/FaqAccordion";
+import { BookmarkletSection } from "@/components/BookmarkletSection";
 
 export const metadata: Metadata = {
   title: "Docs · Save Point",
-  description: "Quickstart, what a save point is, loading the extension, and privacy.",
+  description: "Quickstart, what a save point is, the extension's real limitations, the mobile fallback, and privacy.",
 };
 
 export default function DocsPage() {
@@ -18,8 +19,8 @@ export default function DocsPage() {
 
         <h1 className="mt-8 text-3xl font-bold text-ink sm:text-4xl">Docs</h1>
         <p className="mt-3 max-w-read text-lg text-ink-soft">
-          Everything you need to set up and use Save Point — the workspace and
-          the desktop extension.
+          Everything you need to set up and use Save Point — the workspace,
+          the desktop extension, and what to do on a phone.
         </p>
 
         <div className="mt-14 max-w-read space-y-16">
@@ -73,7 +74,7 @@ export default function DocsPage() {
               The extension lets you create a save point from any web page — not
               just the workspace — so it works where your reading actually
               happens, across dozens of open tabs. It is desktop Chrome only;
-              Manifest V3 extensions don&apos;t run on mobile browsers.
+              Manifest V3 extensions don&apos;t run on mobile browsers at all.
             </p>
             <ol className="mt-4 list-decimal space-y-3 pl-5">
               <li>
@@ -105,7 +106,9 @@ export default function DocsPage() {
             <p className="mt-4">
               If the workspace isn&apos;t running at <code className="rounded bg-mist px-1.5 py-0.5 text-ink">http://localhost:3000</code>,
               right-click the extension icon → <strong className="text-ink">Options</strong> and
-              change the <strong className="text-ink">Workspace address</strong> to match.
+              change the <strong className="text-ink">Workspace address</strong> to match — for
+              example <code className="rounded bg-mist px-1.5 py-0.5 text-ink">https://savepoint-seven.vercel.app</code> to
+              save into the live deployment instead of a local dev server.
             </p>
             <p className="mt-4 rounded-lg border border-line bg-paper-2 p-4 text-[15px]">
               <strong className="text-ink">Don&apos;t have this project&apos;s files?</strong> &ldquo;Load
@@ -116,6 +119,110 @@ export default function DocsPage() {
               or check whether it&apos;s been published to the Web Store yet —
               if so, install it from there instead and skip the steps above.
             </p>
+
+            <h3 className="mt-8 text-lg font-bold text-ink">
+              What actually gets in the way of using it
+            </h3>
+            <p className="mt-2">
+              Being honest about this matters more than most feature lists,
+              because this build is not on the Chrome Web Store yet — every
+              limitation below is a direct consequence of that, not a design
+              choice:
+            </p>
+            <ul className="mt-3 list-disc space-y-3 pl-5">
+              <li>
+                <strong className="text-ink">School-managed Chromebooks often block it entirely.</strong>{" "}
+                Most K–12 school IT departments manage student Chromebooks
+                through Google Admin policy, and a common default is
+                disabling Developer Mode and unpacked-extension installs
+                outright. On a locked-down school device, step 2 above
+                (&ldquo;Turn on Developer mode&rdquo;) may simply not be an
+                option — the toggle is greyed out or the whole page is
+                blocked. There is no workaround for this from inside the
+                extension; it needs either a Chrome Web Store listing (which
+                admins can allow-list) or an IT exception. This is the single
+                biggest real-world gap for the actual target audience of this
+                product.
+              </li>
+              <li>
+                <strong className="text-ink">No auto-updates.</strong> Because
+                it&apos;s not on the Web Store, the extension never updates
+                itself. If the code changes, you have to manually reload it
+                (chrome://extensions → the reload icon on the Save Point
+                card) or re-do &ldquo;Load unpacked&rdquo; with the new files.
+              </li>
+              <li>
+                <strong className="text-ink">Chrome nags about it.</strong>{" "}
+                Chrome periodically shows a &ldquo;Disable developer mode
+                extensions&rdquo; warning banner for any unpacked extension.
+                Dismissing it is safe; it&apos;s Chrome being cautious about
+                unsigned code, not a sign anything is wrong.
+              </li>
+              <li>
+                <strong className="text-ink">Some pages block it from reading anything.</strong>{" "}
+                Chrome doesn&apos;t allow extensions to run on its own internal
+                pages (<code className="rounded bg-mist px-1.5 py-0.5 text-ink">chrome://</code>),
+                the Chrome Web Store, or a handful of sites with unusually
+                strict content-security policies. On those pages, the popup
+                still opens and still saves — it just captures an empty
+                selection and snippet instead of erroring. If a save from one
+                of these pages looks unusually empty, that&apos;s why.
+              </li>
+              <li>
+                <strong className="text-ink">Chrome (desktop) only, tested.</strong>{" "}
+                Manifest V3 extensions can sometimes load in other
+                Chromium-based browsers (Edge, Brave), but that&apos;s
+                untested here — assume Chrome unless you&apos;ve verified
+                otherwise yourself.
+              </li>
+            </ul>
+          </DocSection>
+
+          <DocSection id="mobile" eyebrow="No extension here" title="Mobile & locked-down devices">
+            <p>
+              Browser extensions don&apos;t run on any mobile browser — not
+              Android Chrome, not iOS Safari. That&apos;s an Apple/Google
+              platform restriction, not something any web app can work around.
+              The same is true on a school Chromebook with Developer Mode
+              disabled (see above). Two real fallbacks exist for both cases:
+            </p>
+
+            <h3 className="mt-6 text-lg font-bold text-ink">
+              1. The workspace itself, on your phone
+            </h3>
+            <p className="mt-2">
+              <Link href="/workspace" className="text-sage underline underline-offset-2">
+                The workspace
+              </Link>{" "}
+              is a normal responsive website — open it in your phone&apos;s
+              browser, sign in, and it works the same as on a laptop, just
+              stacked into one column. What you lose without the extension is
+              automatic page capture: you can&apos;t grab the current tab&apos;s
+              title, selection, or a snippet with one tap. What you keep is
+              everything else — write a quick note about what you were reading
+              (typed or dictated, using your phone&apos;s own voice-to-text
+              keyboard), tap <strong className="text-ink">Save where my brain
+              is</strong>, and the AI reconstructs from that note the same way
+              it would from anything else.
+            </p>
+
+            <h3 className="mt-6 text-lg font-bold text-ink">
+              2. A bookmarklet — the closest thing to the extension, on a phone
+            </h3>
+            <p className="mt-2">
+              A bookmarklet is a bookmark whose address is a small piece of
+              JavaScript instead of a URL — tapping it runs on whatever page
+              you&apos;re currently looking at. It needs no app store, no
+              browser extension store, no Developer Mode, and works
+              identically on iOS Safari, Android Chrome, and a locked-down
+              school Chromebook. It captures the same scope as the desktop
+              extension (page title, address, your selection, a short
+              snippet) and hands it to your already-signed-in workspace to
+              confirm and save — it can&apos;t save directly, because a
+              bookmarklet runs on someone else&apos;s page and has no way to
+              prove who you are on this one.
+            </p>
+            <BookmarkletSection />
           </DocSection>
 
           <DocSection id="privacy" eyebrow="How it works" title="Privacy">
@@ -123,13 +230,14 @@ export default function DocsPage() {
               Save Point only reads what&apos;s in front of you at the exact
               moment you choose to save — the active tab&apos;s title and URL,
               any text you had selected, a short snippet of the page, your other
-              open tab titles, and whatever note you leave. Nothing more.
+              open tab titles, and whatever note you leave. Nothing more. The
+              mobile bookmarklet follows the identical rule.
             </p>
             <p className="mt-4">
               There is no background monitoring, no continuous screen capture, no
-              browser-history reading, and no keystroke logging. The extension is
-              a save trigger, not a surveillance layer — it does nothing until
-              you tap the button.
+              browser-history reading, and no keystroke logging. Both the
+              extension and the bookmarklet are save triggers, not a
+              surveillance layer — neither does anything until you tap them.
             </p>
           </DocSection>
 

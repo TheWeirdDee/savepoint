@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import type { SavePoint, ReconstructOutcome, AuthUser } from "@/lib/types";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { SavePoint, SavePointCapture, ReconstructOutcome, AuthUser } from "@/lib/types";
 import {
   buildWorkspaceCapture,
   createSavePoint,
@@ -18,6 +18,16 @@ import { RestoreOffer } from "./RestoreOffer";
 import { RestoreCard } from "./RestoreCard";
 import { SavePointList } from "./SavePointList";
 import { AccessibilityBar } from "./AccessibilityBar";
+import { PendingCaptureCard } from "./PendingCaptureCard";
+
+// What the mobile bookmarklet (see /docs) packs into ?capture= — the same
+// scope as the extension's activeContext, nothing more.
+type BookmarkletCapture = {
+  title?: string;
+  url?: string;
+  selectedText?: string;
+  visibleTextSnippet?: string;
+};
 
 type View =
   | { mode: "writing" }
@@ -26,6 +36,7 @@ type View =
 
 export function Workspace({ user }: { user: AuthUser }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [savePoints, setSavePoints] = useState<SavePoint[]>([]);
@@ -33,6 +44,7 @@ export function Workspace({ user }: { user: AuthUser }) {
   const [offerDismissed, setOfferDismissed] = useState(false);
   const [view, setView] = useState<View>({ mode: "writing" });
   const [loggingOut, setLoggingOut] = useState(false);
+  const [pendingCapture, setPendingCapture] = useState<BookmarkletCapture | null>(null);
 
   // Load draft + past save points on mount. The unrestored one becomes the offer.
   useEffect(() => {
@@ -54,6 +66,45 @@ export function Workspace({ user }: { user: AuthUser }) {
     const t = setTimeout(() => saveDraft(title, content), 400);
     return () => clearTimeout(t);
   }, [title, content]);
+
+  // The mobile bookmarklet fallback (see /docs) lands here with ?capture=,
+  // since it has no way to authenticate directly the way the extension does
+  // (a bookmarklet runs on a third-party page and can't read this site's
+  // httpOnly session cookie). It hands off the captured context instead, and
+  // this workspace — already signed in — turns it into a real save point.
+  useEffect(() => {
+    const raw = searchParams.get("capture");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as BookmarkletCapture;
+      setPendingCapture(parsed);
+    } catch {
+      /* malformed or tampered-with param — best-effort, fail silently */
+    }
+    router.replace("/workspace");
+  }, [searchParams, router]);
+
+  const handleSaveCapture = useCallback(
+    async (note: string) => {
+      if (!pendingCapture) return;
+      const capture: SavePointCapture = {
+        source: "extension",
+        userNote: note.trim() || undefined,
+        activeContext: {
+          title: pendingCapture.title,
+          url: pendingCapture.url,
+          selectedText: pendingCapture.selectedText,
+          visibleTextSnippet: pendingCapture.visibleTextSnippet,
+        },
+        openTabs: [],
+        workspaceContext: {},
+      };
+      const sp = await createSavePoint(capture);
+      setSavePoints((prev) => [sp, ...prev]);
+      setPendingCapture(null);
+    },
+    [pendingCapture]
+  );
 
   const handleSave = useCallback(
     async (note: string) => {
@@ -156,6 +207,17 @@ export function Workspace({ user }: { user: AuthUser }) {
 
         {/* MAIN PANE */}
         <main className="min-w-0">
+          {/* Landing spot for the mobile bookmarklet fallback */}
+          {pendingCapture && view.mode === "writing" && (
+            <div className="mb-6">
+              <PendingCaptureCard
+                capture={pendingCapture}
+                onSave={handleSaveCapture}
+                onDiscard={() => setPendingCapture(null)}
+              />
+            </div>
+          )}
+
           {/* On-load restore offer — a quiet banner, not a takeover */}
           {offer && !offerDismissed && view.mode === "writing" && (
             <div className="mb-6">

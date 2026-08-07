@@ -28,6 +28,7 @@ same account.
 - [Database schema](#database-schema)
 - [Accounts](#accounts)
 - [The browser extension](#the-browser-extension-desktop-only)
+- [Mobile & locked-down devices](#mobile--locked-down-devices)
 - [API reference](#api-reference)
 - [Accessibility](#accessibility)
 - [Design system](#design-system)
@@ -116,7 +117,9 @@ See [Resilience](#resilience--when-the-ai-itself-fails) below.
 | Database | Supabase (Postgres) | free tier, service-role access only from server routes |
 | AI | Google Gemini (`gemini-flash-latest`), free tier | zero cost, generous free quota, JSON-mode output |
 | Auth | Custom — bcrypt + JWT, httpOnly cookie + Bearer | simple username/password, no OAuth dependency |
+| Password reset email | Resend REST API (no SDK), free tier | one endpoint, no extra dependency, generous free quota |
 | Extension | Manifest V3, vanilla HTML/CSS/JS | no build step, small surface area |
+| Mobile fallback | Bookmarklet (plain JS, no install) | the one capture mechanism that works on every mobile browser |
 | Hosting | Vercel | zero-config Next.js deploys, serverless API routes |
 
 ## Architecture
@@ -160,21 +163,27 @@ save-point/
       globals.css              ND-first design tokens + accessibility class hooks
       login/page.tsx           username + password login
       signup/page.tsx          email, full name, username, password
+      forgot-password/page.tsx request a password-reset email
+      reset-password/[token]/page.tsx   set a new password from the emailed link
       workspace/page.tsx       session-protected — redirects to /login if signed out
-      docs/page.tsx            quickstart, what a save point is, extension setup, privacy, FAQ
+      docs/page.tsx            quickstart, extension setup + real gaps, mobile fallback, privacy, FAQ
       api/
         auth/
-          signup/route.ts      create account, hash password, sign session
-          login/route.ts       verify password, sign session (CORS-enabled for the extension)
-          me/route.ts          resolve the current session to a user
-          logout/route.ts      clear the session cookie
+          signup/route.ts          create account, hash password, sign session
+          login/route.ts           verify password, sign session (CORS-enabled for the extension)
+          me/route.ts              resolve the current session to a user
+          logout/route.ts          clear the session cookie
+          forgot-password/route.ts generate + email a one-hour reset token (never confirms if the email exists)
+          reset-password/route.ts  verify the token, set a new password, sign in immediately
         save-points/route.ts   POST create, GET list, PATCH correct/mark-restored (session-scoped)
         reconstruct/route.ts   POST — run Gemini, classify failures, cache on success, mark restored
         health/ai/route.ts     opt-in (?check=1) live Gemini reachability check, never auto-called
     components/
-      Workspace.tsx            the app shell: write, save, on-load restore offer, restore, log out
-      LoginForm.tsx / SignupForm.tsx   the account forms
+      Workspace.tsx            the app shell: write, save, restore, log out, and the mobile-bookmarklet landing flow
+      LoginForm.tsx / SignupForm.tsx / ForgotPasswordForm.tsx / ResetPasswordForm.tsx   the account forms
+      PasswordField.tsx        password input with a show/hide toggle
       SavePointButton.tsx      one-tap deliberate save, optional typed/dictated note
+      PendingCaptureCard.tsx   "Save this page?" — where the mobile bookmarklet hands off its capture
       RestoreCard.tsx          next step first → where-you-were → confirm → More context
                                 (branches into a genuine low-context card or a distinct failure card)
       RestoreOffer.tsx         calm "Welcome back" pull (no time-guilt)
@@ -183,9 +192,11 @@ save-point/
       AccessibilityBar.tsx     text size, spacing, dyslexia font, reduced motion (floating + inline)
       SavePointList.tsx        past save points, capped + expandable, no badges/dots
       FaqAccordion.tsx         shared accordion (landing page + /docs)
+      BookmarkletSection.tsx   the mobile capture fallback — install steps + copyable bookmarklet code
     lib/
       types.ts                 the shared schema — capture, reconstruction, outcome, auth types
-      auth.ts                  password hashing, session JWTs, cookie + Bearer resolution
+      auth.ts                  password hashing, session JWTs, cookie + Bearer resolution, reset tokens
+      email.ts                 server-only lazy Resend client — password-reset email only
       cors.ts                  CORS headers for the two routes the extension calls cross-origin
       reconstruct-prompt.ts    the core AI job: sparse-signal fusion, no fabrication, low-context path
       reconstruct.ts           calls Gemini, classifies failures by type, never caches a failure
@@ -194,8 +205,8 @@ save-point/
       supabase.ts              server-only lazy service-role client
       client.ts                draft persistence + API client (browser)
       map.ts                   DB row -> API shape
-  supabase/schema.sql          users + save_points tables, locked-down RLS
-  extension/                   Manifest V3 sensor (popup + options) — desktop only, login-based
+  supabase/schema.sql          users (+ reset tokens) + save_points tables, locked-down RLS
+  extension/                   Manifest V3 sensor (popup + options) — desktop Chrome only, login-based
   .env.example
 ```
 
@@ -218,6 +229,8 @@ save-point/
    GOOGLE_API_KEY=...                 # free key from aistudio.google.com
    GEMINI_MODEL=gemini-flash-latest   # optional override, this is the default
    SESSION_SECRET=...                 # any long random string, e.g. `openssl rand -base64 48`
+   RESEND_API_KEY=...                 # free key from resend.com/api-keys — powers "forgot password"
+   RESEND_FROM_EMAIL=                 # optional; leave empty to use Resend's sandbox sender
    NEXT_PUBLIC_DEMO_MODE=             # leave empty; see "Resilience" below
    ```
 
@@ -242,9 +255,9 @@ runs exactly this repo, zero-config.
 
 1. Import the GitHub repo into Vercel (framework preset: Next.js — it will
    auto-detect).
-2. **Project Settings → Environment Variables** — add these five (same
-   values as your local `.env.local`; use **Production** + **Preview** +
-   **Development** scope for all of them):
+2. **Project Settings → Environment Variables** — add these (same values as
+   your local `.env.local`; use **Production** + **Preview** + **Development**
+   scope for all of them):
 
    | Key | Value |
    |---|---|
@@ -253,6 +266,8 @@ runs exactly this repo, zero-config.
    | `GOOGLE_API_KEY` | your free Gemini API key |
    | `GEMINI_MODEL` | `gemini-flash-latest` |
    | `SESSION_SECRET` | a long random string (reuse your local one, or generate a new one — either is fine, it just needs to stay stable so existing sessions don't get invalidated on redeploy) |
+   | `RESEND_API_KEY` | your free Resend key — without this, "forgot password" requests will 500 |
+   | `RESEND_FROM_EMAIL` | optional — leave unset to use Resend's shared sandbox sender |
 
    Optional, off unless you want it: `NEXT_PUBLIC_DEMO_MODE` — leave unset
    for a real deploy.
@@ -273,7 +288,11 @@ Because Next.js inlines `NEXT_PUBLIC_*` variables at build time, changing
 See `supabase/schema.sql` for the full, authoritative version. Summary:
 
 ```sql
-users (id, email [unique], full_name, username [unique], password_hash, created_at)
+users (
+  id, email [unique], full_name, username [unique], password_hash,
+  reset_token_hash, reset_token_expires_at,  -- null except during an active password reset
+  created_at
+)
 save_points (
   id, user_id -> users.id,
   source ('workspace' | 'extension'),
@@ -302,6 +321,14 @@ server-protected route — visiting it without a valid session redirects to
 `/login`. Login failures always return the same generic message regardless
 of whether the username or the password was wrong.
 
+**Forgot your password?** `/forgot-password` emails a one-time reset link
+(via Resend) that expires in an hour. The response is identical whether or
+not the email is on file, so the endpoint never confirms which accounts
+exist. The raw token is never stored — only its SHA-256 hash — so a leaked
+database snapshot alone can't be used to reset anyone's password. Following
+the link to `/reset-password/[token]` and setting a new password signs you
+in immediately, since you've just proven account ownership.
+
 ## The browser extension (desktop only)
 
 The extension is a thin **sensor**: it captures the same packet shape the
@@ -327,6 +354,36 @@ selected text, a short page snippet, and your other open tab titles — plus
 an optional note — into the same account as your workspace saves. If the
 session ever expires, the popup drops back to the login form automatically.
 
+**Being honest about this method's real limits:** it isn't on the Chrome Web
+Store, which means (1) many school-managed Chromebooks block Developer Mode
+outright and won't allow it to load at all — the single biggest real-world
+gap for the actual K–12 target audience, (2) it never auto-updates — reload
+it manually from `chrome://extensions` after any code change, and (3) it only
+runs on desktop Chrome, never on any mobile browser. Full detail, plus what
+to do about each of these, is in **`/docs#extension`**.
+
+## Mobile & locked-down devices
+
+Chrome extensions don't run on any mobile browser (Apple/Google platform
+restriction, not a choice made here) and often can't load at all on a
+school-managed Chromebook with Developer Mode disabled. Two fallbacks:
+
+1. **The workspace itself** — a normal responsive site. Sign in on a phone,
+   type or dictate a note, tap save. You lose automatic page capture; you
+   keep everything else.
+2. **A bookmarklet** (`src/components/BookmarkletSection.tsx`, surfaced on
+   `/docs#mobile`) — a bookmark whose address is JavaScript instead of a URL.
+   Needs no app store, extension store, or Developer Mode, and works
+   identically on iOS Safari, Android Chrome, and a locked-down Chromebook.
+   It captures the same scope as the extension (title, url, selection, a
+   short snippet) but can't save directly — a bookmarklet runs on whatever
+   third-party page it's tapped on and has no way to read this site's
+   httpOnly session cookie. Instead it opens the already-signed-in workspace
+   at `/workspace?capture=<encoded JSON>`; `Workspace.tsx` picks that param
+   up, shows a **"Save this page?"** confirmation
+   (`PendingCaptureCard.tsx`), and turns it into a real save point on
+   confirm, then clears the param so a refresh doesn't re-trigger it.
+
 ## API reference
 
 All `/api/*` routes are Node runtime, `force-dynamic` (never prerendered).
@@ -337,6 +394,8 @@ All `/api/*` routes are Node runtime, `force-dynamic` (never prerendered).
 | `/api/auth/login` | POST | — | verify credentials, same response shape; CORS-enabled for the extension |
 | `/api/auth/me` | GET | cookie/Bearer | resolve the current session to a user |
 | `/api/auth/logout` | POST | cookie | clear the session cookie |
+| `/api/auth/forgot-password` | POST | — | email a one-hour reset link; same response whether or not the email exists |
+| `/api/auth/reset-password` | POST | — | verify the token, set a new password, sign in immediately |
 | `/api/save-points` | POST | cookie/Bearer | create a save point; CORS-enabled for the extension |
 | `/api/save-points` | GET | cookie | list this user's save points + the latest unrestored one |
 | `/api/save-points` | PATCH | cookie | record a decision correction and/or mark restored |
@@ -431,21 +490,42 @@ on demo day, set `?demo=1` on the workspace URL as a safety net.
 
 ## Neurodivergent-user evidence
 
-Design authority: built by an ADHD developer from lived experience of the
-re-entry problem — say this plainly, don't claim it speaks for all ADHD
-minds. Testing: run one ~20-minute session with a dyslexic tester on the
-restore flow. Ask what they forget after leaving an assignment, whether the
-restore card feels accurate, whether the next action is small enough to
-start, and what feels overwhelming. Then write it up specifically,
-protecting their privacy, with one concrete change — that's what turns the
-impact story from *claimed* to *demonstrated*. See `BUILD_REPORT.md` for the
-exact manual step.
+Save Point is built by two neurodivergent students, Divine and Eniola.
+Between us, we live with ADHD and dyslexia. We aren't outside testers who
+tried the app once before submission — we're the users it was built for, and
+our own daily experience is what shaped the actual decisions in this repo,
+not just the pitch:
+
+- **The core problem is something one of us lives with.** Getting pulled
+  away from schoolwork and coming back to find the files still open but the
+  *thinking* behind them gone — why a paragraph mattered, which idea had
+  already been ruled out, what came next. That's the ADHD experience that
+  started this project (see [PRD.md](PRD.md), section 2).
+- **No shame, ever.** Save Point never says "you were gone 2 hours" and has
+  no streaks. That rule exists because being reminded how long you were away
+  doesn't help you start again — it just adds guilt on top of the work
+  itself. See the framing rule in [PRD.md](PRD.md), section 3.
+- **Saving can never require filling out a form.** The note on a save point
+  is optional and skippable, because the moment you're interrupted is the
+  worst possible moment to ask someone with ADHD to stop and write a
+  paragraph. Make it required, and people just stop saving.
+- **Restore leads with one next action, not a wall of text.** For dyslexia, a
+  dense summary reads like more homework before you've even started. So the
+  restore screen shows one small, concrete next step first, and everything
+  else stays collapsed behind "More context" until it's asked for.
+- **The reading settings aren't decoration.** Dyslexia-friendly font, larger
+  text, relaxed line spacing, reduced motion — these exist because without
+  them, one of us can't comfortably read the app's own UI. They're real
+  toggles, tested on ourselves, not a checkbox for a features list.
+
+"Designed with, not just for" isn't a single test session bolted on before
+submission here — it was true for the whole build.
 
 ## Scope (deliberately bounded)
 
 One user, one document at a time, manual save points. Accounts are simple
-username/password only — no OAuth, no email verification, no password reset
-flow yet. **Excluded:** collaboration, teacher dashboards, automatic
+username/password (with email-based password reset) — no OAuth, no email
+verification. **Excluded:** collaboration, teacher dashboards, automatic
 interruption detection, passive monitoring, browser-history reading,
 rich-text editing, calendar/reminders, gamification. A powerful restore + a
 tiny extension beats a weak restore + a fancy extension.

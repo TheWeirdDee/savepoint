@@ -65,7 +65,7 @@ Collaboration, teacher dashboards, automatic interruption detection, continuous/
 
 ## 10. Success — rubric mapping (IncludAI / Stanford NNEA)
 
-- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed from lived ADHD experience; evidence via a real neurodivergent (dyslexic) tester session.
+- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed and tested by the two neurodivergent students building it (ADHD, dyslexia) — see [README.md](README.md#neurodivergent-user-evidence) for specifics.
 - **Innovation in AI — 25%:** sparse-signal fusion + confidence tiers + no-fabrication low-context path.
 - **Usability & accessibility — 25%:** one-action save, next-action-first restore, progressive disclosure, dyslexia mode, reduced motion, keyboard/ARIA.
 - **Technical execution — 10%:** clean build, shared schema, structured AI output, persistence, working extension.

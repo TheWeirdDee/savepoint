@@ -955,3 +955,112 @@ Supporting threads (stay in More context): [{"text":"The citation format your te
   changed. The person should re-verify a live success once quota resets
   (daily free-tier limits typically reset at a fixed time — check
   aistudio.google.com for the account's actual reset window).
+
+---
+
+## GIT + PASSWORD RESET + MOBILE FALLBACK PASS
+
+### Publishing to GitHub
+
+Pushed to `https://github.com/TheWeirdDee/savepoint` (branch `main`). The
+"no git" rule from earlier passes was explicitly lifted by the person for
+this action. Before touching git: wrote `.gitignore` (excludes `.env*.local`,
+`node_modules`, `.next`, `*.tsbuildinfo`), then verified with three
+independent checks that no real secret value existed in any tracked file —
+a broad scan, then a precise scan against the three actual secret values
+(`SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_API_KEY`, `SESSION_SECRET`), then
+`git check-ignore -v .env.local` — before the first `git add`. The remote
+repo wasn't empty (GitHub's default one-line README from repo creation), so
+rather than force-push over it, it was cloned to inspect first, merged with
+`--allow-unrelated-histories`, and the resulting `README.md` conflict was
+resolved in favor of the real project README. Commit messages carry no
+`Co-Authored-By` line, per explicit instruction. Verified post-push directly
+against GitHub's API: `GET /contents/.env.local` → `404`, and a recursive
+tree listing contains no `node_modules`/`.next`/`.env.local` paths.
+
+Follow-up commit removed `SAVE_POINT_HANDOFF.md` and
+`SAVE_POINT_CHECKLIST.md` (agent-internal build tracking, not useful to repo
+readers) and expanded `README.md` from a setup guide into full project
+documentation — architecture diagram, complete project structure, a Vercel
+deploy section with the exact env vars, database schema, full API reference,
+and dedicated accessibility/design-system/privacy/resilience sections.
+
+### Password reset (completing in-progress scaffolding)
+
+Editor-side work already in progress (bcrypt/JWT reset-token helpers in
+`auth.ts`, `ForgotPasswordInput`/`ResetPasswordInput` types, both API routes,
+schema columns, and the client-side `forgotPassword()`/`resetPassword()`
+calls) was missing exactly three pieces, which is what made the build fail:
+`src/components/PasswordField.tsx` (a show/hide password input, imported by
+both `LoginForm.tsx` and `SignupForm.tsx` but not yet created),
+`src/lib/email.ts` (imported by `forgot-password/route.ts` but not yet
+created), and the two pages the flow's own links and redirect URL pointed at
+(`/forgot-password`, `/reset-password/[token]`). All three were completed to
+match the existing code's conventions exactly — `email.ts` follows the same
+lazy-client pattern as `supabase.ts`/`gemini.ts` (`getApiKey()` throws only
+when actually called without `RESEND_API_KEY`, never at import time), and
+uses Resend's REST API directly via `fetch` rather than adding an SDK
+dependency, since it's a single endpoint. The reset flow itself was already
+well-designed: generic response regardless of whether the email exists,
+SHA-256-hashed tokens (never the raw token) with a 1-hour TTL, and immediate
+sign-in on successful reset since the user just proved account ownership.
+
+**Manual step this adds:** a free Resend API key
+(resend.com/api-keys — no card, no domain needed to start; the shared
+sandbox sender works immediately) in both `.env.local` and Vercel's env vars
+as `RESEND_API_KEY`. Without it, `/forgot-password` requests will 500 — the
+route already handles this gracefully (`console.error` + a clear "check
+RESEND_API_KEY" message) rather than crashing.
+
+**Schema change:** `users` gained `reset_token_hash` and
+`reset_token_expires_at` (nullable). `supabase/schema.sql` already includes
+`alter table ... add column if not exists` lines, so it's safe to re-run
+against an existing database without dropping anything — unlike the earlier
+accounts-pass migration, this one does **not** touch `save_points`.
+
+### The mobile / locked-down-device gap
+
+Raised directly: Chrome extensions don't run on any mobile browser, and the
+existing docs didn't say what to do about it beyond "use the responsive
+website." Two things were built in response:
+
+1. **Honest documentation of the extension's *actual* friction**, not just
+   "desktop only" — `/docs#extension` now covers: school-managed Chromebooks
+   commonly disable Developer Mode outright, which blocks this
+   unpublished (not on the Chrome Web Store) extension from loading at
+   all — the single biggest real gap for the K–12 target audience; no
+   auto-updates; Chrome's periodic "disable developer mode extensions" nag;
+   and pages that block content-script capture (`chrome://`, the Web Store,
+   strict-CSP sites), where the popup still opens but the selection/snippet
+   comes back empty rather than erroring.
+2. **A bookmarklet fallback** (`src/components/BookmarkletSection.tsx`,
+   documented at `/docs#mobile`) — the one capture mechanism that genuinely
+   works on iOS Safari, Android Chrome, and a locked-down Chromebook alike,
+   since it needs no app store, extension store, or Developer Mode. It
+   can't authenticate directly (a bookmarklet executes on whatever
+   third-party page it's tapped on and has no access to this site's
+   httpOnly session cookie), so instead of posting to the API itself it
+   captures the same scope as the extension (title, url, selection, a
+   ~700-char snippet — enforced with `.slice()` calls in the bookmarklet
+   source itself) and hands off via
+   `${WORKSPACE_ORIGIN}/workspace?capture=<encoded JSON>`. `Workspace.tsx`
+   reads that param with `useSearchParams()`, shows a **"Save this page?"**
+   confirmation (`PendingCaptureCard.tsx`) rather than auto-saving, and
+   clears the param via `router.replace("/workspace")` once handled so a
+   refresh doesn't re-trigger it. Capture-scope discipline is identical to
+   the extension's — no new data collected, just a new transport for it.
+
+### Verification
+
+- `npx tsc --noEmit` → clean.
+- `npm run build --webpack` → `✓ Compiled successfully` (one transient
+  "socket hang up" fetching Google Fonts, auto-retried successfully — a
+  network blip, not a code issue), 16 routes: the original 12 plus
+  `/forgot-password`, `/reset-password/[token]`, `/api/auth/forgot-password`,
+  `/api/auth/reset-password`.
+- **Not runtime-verified in this pass:** an actual password-reset email
+  being sent and received (needs a live `RESEND_API_KEY`, which is a manual
+  step), and the bookmarklet's behavior on a real phone (needs a physical
+  device or mobile emulator, not something scriptable from here). The code
+  paths, capture-scope limits, and URL-handoff logic were verified by
+  reading and by the clean build, not by an end-to-end click-through.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { login } from "@/lib/client";
+import { PasswordField } from "./PasswordField";
 
 export function LoginForm() {
   const router = useRouter();
@@ -45,16 +46,19 @@ export function LoginForm() {
         </Field>
 
         <Field label="Password" htmlFor="password">
-          <input
+          <PasswordField
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-ink focus:border-sage focus:outline-none"
           />
+          <p className="mt-1.5 text-right text-sm">
+            <Link href="/forgot-password" className="font-bold text-sage underline underline-offset-2">
+              Forgot password?
+            </Link>
+          </p>
         </Field>
 
         {error && (

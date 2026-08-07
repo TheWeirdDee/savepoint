@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signup } from "@/lib/client";
+import { PasswordField } from "./PasswordField";
 
 export function SignupForm() {
   const router = useRouter();
@@ -80,16 +81,14 @@ export function SignupForm() {
         </Field>
 
         <Field label="Password" htmlFor="password" hint="At least 8 characters.">
-          <input
+          <PasswordField
             id="password"
             name="password"
-            type="password"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             required
-            className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-ink focus:border-sage focus:outline-none"
           />
         </Field>
 

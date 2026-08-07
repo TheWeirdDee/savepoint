@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { randomBytes, createHash } from "crypto";
 import type { NextRequest } from "next/server";
 
 // SERVER ONLY. Simple username/password sessions — no email verification, no
@@ -89,4 +90,20 @@ export function isValidUsername(username: string): boolean {
 
 export function isValidPassword(password: string): boolean {
   return password.length >= 8;
+}
+
+// --- Password reset tokens ---
+// The raw token travels once, in the emailed link, and is never stored. Only
+// its SHA-256 hash is persisted, so a leaked DB snapshot can't be used to
+// reset accounts (same reasoning as bcrypt for login passwords, but a plain
+// hash is fine here since the token itself is high-entropy and single-use,
+// not a human-chosen secret).
+export const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+export function generateResetToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function hashResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }

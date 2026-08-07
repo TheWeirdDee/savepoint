@@ -28,7 +28,12 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does it work on my phone?",
     answer:
-      "The workspace works in any browser, including mobile. The browser extension — the part that saves from across your open tabs — is desktop-only, because that's where the many-open-tabs problem actually lives.",
+      "The workspace itself does — it's a normal responsive site, sign in and use it like any other page. The browser extension doesn't; Chrome extensions don't run on any mobile browser, that's an Apple/Google restriction, not a choice this build made. There's a bookmarklet fallback that captures the same way the extension does (title, selection, a short snippet) from your phone's browser — see the Docs page for it.",
+  },
+  {
+    question: "My school Chromebook won't let me install the extension — now what?",
+    answer:
+      "Managed school devices often disable Developer Mode entirely, which blocks unpacked extensions like this one (it isn't on the Chrome Web Store yet). The bookmarklet works around this the same way it works around no mobile extensions — it needs no Developer Mode and no store, just a bookmark. See the Docs page's mobile section.",
   },
   {
     question: "What if the AI gets it wrong?",

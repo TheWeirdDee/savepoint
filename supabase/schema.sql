@@ -17,8 +17,17 @@ create table if not exists public.users (
   full_name       text not null,
   username        citext not null unique,
   password_hash   text not null,
+  -- Password reset: only a SHA-256 hash of the emailed token is ever stored
+  -- (same reasoning as password_hash — the raw token must not be readable
+  -- from the DB). Null when no reset is pending.
+  reset_token_hash       text,
+  reset_token_expires_at timestamptz,
   created_at      timestamptz not null default now()
 );
+
+-- Add reset-token columns for databases created before this feature existed.
+alter table public.users add column if not exists reset_token_hash text;
+alter table public.users add column if not exists reset_token_expires_at timestamptz;
 
 -- Fresh schema for save_points (demo scope — dropping any earlier anonymous
 -- rows keyed by device_id is fine; there is no migration path for those).

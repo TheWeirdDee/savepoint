@@ -9,6 +9,8 @@ import type {
   AuthUser,
   SignupInput,
   LoginInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
 } from "./types";
 import { DEMO_RECONSTRUCTED_STATE } from "./demoFixtures";
 
@@ -131,6 +133,26 @@ export async function login(input: LoginInput): Promise<AuthUser> {
 
 export async function logout(): Promise<void> {
   await fetch("/api/auth/logout", { method: "POST" });
+}
+
+export async function forgotPassword(input: ForgotPasswordInput): Promise<string> {
+  const res = await fetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson(res);
+  return data.message as string;
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<AuthUser> {
+  const res = await fetch("/api/auth/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson(res);
+  return data.user as AuthUser;
 }
 
 // --- Save-point API client (identity comes from the session cookie) ---
