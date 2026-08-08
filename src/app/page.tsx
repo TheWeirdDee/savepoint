@@ -352,7 +352,7 @@ export default async function LandingPage() {
               without us.
               <br />
               <br />
-              Designed with neurodivergent students, not just for them.
+              Designed from lived neurodivergent experience.
             </p>
           </div>
         </section>
@@ -428,7 +428,7 @@ export default async function LandingPage() {
             <FooterColumn title="About">
               <FooterLink href="#who">Who it&apos;s for</FooterLink>
               <FooterLink href="/docs#privacy">Our approach to privacy</FooterLink>
-              <FooterLink href="#who">Built with the community</FooterLink>
+              <FooterLink href="#who">Built from lived experience</FooterLink>
             </FooterColumn>
           </div>
           <div className="mt-10 flex flex-wrap justify-between gap-4 border-t border-line-dark pt-6 text-sm">

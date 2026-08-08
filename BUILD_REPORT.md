@@ -211,14 +211,12 @@ genuinely remaining setup step.
    directly (see "Gemini model fix"); the extension leg of this check is
    still outstanding pending step 5.
 7. **Record the demo, write the Devpost description, make the repo public.**
-   Use the run sheet in `README.md` ("Demo-day run sheet") as the shot list.
-   Pre-make one rich save point and one thin one before recording.
-8. **Run a dyslexic-tester session** (~20 minutes) on the restore flow. Ask
-   what they forget after leaving an assignment, whether the restore card
-   feels accurate, whether the next action is small enough to start, and what
-   feels overwhelming. Write up one direct quote and one concrete change made
-   in response, protecting the tester's privacy (first name or initial only,
-   with consent).
+   The README no longer contains a demo-day run sheet.
+8. **Run a real dyslexia-user session** on the restore flow. This remains a
+   genuine next step, not completed evidence and not a prerequisite for
+   stating the builder's own lived experience. Record only feedback that is
+   actually received and consented for use; do not pre-fill names, quotes,
+   relationships, outcomes, or claimed design changes.
 9. **Any git commit or push.** This agent never runs git. When ready, review
    the working tree, then commit and push manually.
 
@@ -597,15 +595,12 @@ addition was required, only the CORS headers on the server side above.
    **Partially done** — save/restore/reconstruct confirmed working on the
    workspace side; the extension leg (step 5) is still outstanding.
 7. Record the demo, write the Devpost description, make the repo public.
-8. Run the dyslexic-tester session; write up one quote and one concrete change.
-   **Still not done** — `README.md`'s "Neurodivergent-user evidence" section
-   (README/DOCS SYNC pass) now carries the correct framing (one ADHD
-   builder, one dyslexic tester) with two literal placeholder slots —
-   `` `[ONE DIRECT QUOTE...]` `` and `` `[ONE CONCRETE CHANGE MADE...]` `` —
-   marking exactly where this session's real quote and real change go. This
-   section must be completed with the real quote/change **before
-   submission** and must never be committed or presented with the
-   placeholders left in as if they were real content.
+8. Run a real dyslexia-user testing session.
+   **Still not done.** The unverified completed-tester claim and its quote/
+   outcome placeholders were removed from the docs. The current framing says
+   only what is true: Save Point was designed by one neurodivergent (ADHD)
+   builder from lived experience, and external dyslexia-user testing remains
+   a genuine next step. It is not presented as completed evidence.
 9. Any git commit/push — never done by this agent.
 
 ---
@@ -1697,7 +1692,7 @@ correctable-memory behavior, database schema, and restore UI were not changed.
   remains a manual check until `GROQ_API_KEY` is supplied.
 
 **Verification:** `npm run typecheck` passed and `npm run build` completed
-successfully with Next.js 16.3.0 (webpack).
+  successfully with Next.js 16.3.0 (webpack).
 
 ## README/DOCS SYNC PASS
 
@@ -1770,15 +1765,12 @@ found and fixed the gaps.
   yet been exercised through a real save → restore → correct cycle in the
   running app. `BUILD_REPORT.md` remains the pointer for the full breakdown.
 - **The neurodivergent-user evidence section — the important one.**
-  Replaced the "built by two neurodivergent students, Divine and Eniola"
-  framing (inaccurate — Eniola is a tester, not a co-builder) with the exact
-  structure specified: one ADHD builder from lived experience, tested with a
-  dyslexic user, and two **literal, visible placeholder slots** —
-  `` `[ONE DIRECT QUOTE — her exact words — TO BE FILLED IN AFTER THE SESSION]` ``
-  and `` `[ONE CONCRETE CHANGE MADE — ... — TO BE FILLED IN]` `` — for the
-  real quote and real change once that session happens. No quote or outcome
-  was invented to fill them. The same "two students" claim also appeared in
-  `PRD.md`'s rubric-mapping section (§10) and was corrected there too, along
+  Removed an unverified named-tester claim and all quote/outcome placeholders.
+  The replacement states only that one ADHD builder designed from lived
+  experience and that dyslexia-user testing is planned but not yet completed.
+  No external quote, relationship, session, result, or design change is
+  claimed. The same overstatement also appeared in `PRD.md`'s
+  rubric-mapping section (§10) and was corrected there too, along
   with two other stale `PRD.md` claims found during this pass: §8 still
   listed "user accounts/auth (use an anonymous device id)" as a non-goal
   (accounts exist now — see the ACCOUNTS PASS above) and §9 still named
@@ -1792,14 +1784,42 @@ found and fixed the gaps.
 - No application code, database schema, or runtime behavior was changed —
   `git status`-equivalent review of this pass's edits touches only
   `README.md`, `ARCHITECTURE.md`, `PRD.md`, and this file.
-- No fabricated evidence: the two placeholder slots in the
-  neurodivergent-user evidence section are left as literal, visibly-marked
-  placeholders, not invented quotes — see the added Manual Steps Register
-  note (step 8, above) requiring they be filled with the real quote/change
-  before submission and never presented as real content in the meantime.
+- No fabricated evidence: the unverified tester claim and all quote/outcome
+  placeholders were removed rather than filled. Planned external testing is
+  explicitly labeled incomplete.
 - `npx tsc --noEmit` → clean, exit 0. `npm run build --webpack` →
   `✓ Compiled successfully`, all routes unchanged (expected — no code touched).
 - `SAVE_POINT_CHECKLIST.md` was not created or updated — consistent with
   every prior pass this session, it stays deleted from version control per
   the standing instruction; this file is where its close-out notes go
   instead.
+
+## LIVE VERIFICATION PASS — the memory/correction/Groq path, exercised end-to-end
+
+The previous pass's Status rewrite correctly said the correctable-memory
+features and the Groq path had been built and typechecked but never
+runtime-verified end-to-end. This pass closes that gap: a fresh synthetic
+account (`qa_verify_1786210656`) was driven directly against the **live
+production app** (`https://savepoint-seven.vercel.app`) via real HTTP
+requests — no mocks, no demo mode, no local server — following the
+person's own 10-step test script from the deploy-readiness review.
+
+**Confirmed live, with the actual request/response evidence:**
+
+1. `GET /api/health/ai?check=1` on production → `{"ok":true,"primary":"groq","fallbackAvailable":true,"providers":{"groq":{"reachable":true},"gemini":{"reachable":true}}}`. **This resolves the single highest-risk item flagged in the review** — the unreachable result seen earlier was specific to a stale local `npm run dev` process (diagnosed in the README/DOCS SYNC pass), not a Vercel/production env problem. Production was never broken.
+2. Signup → real account created, session cookie issued (HTTP 201).
+3. A rich save point (Source A vs. B, a counterargument, synthetic biology content) → created (HTTP 201), appeared in `GET /api/save-points`.
+4. Restore (real Groq call, not demo mode) → a genuine, accurate reconstruction: correct objective/stopping-point/main-thread, two decisions correctly flagged `needsConfirmation: true`, evidence receipts on every field, both open threads captured accurately (`"Consideration of older sources having better diagrams"` as `primary`, the class-discussion counterargument as `supporting`), `lowContext: false` (correctly — there was plenty of signal).
+5. Correction (`PATCH /api/save-points`, "No, not quite") → the decision's text updated to the corrected value, `needsConfirmation` cleared, a `corrections` entry recorded, and a `user_memory` row written automatically with the student's exact correction text.
+   - **One real finding, not a fabrication-safety issue but a voice-tier bug:** the corrected decision's `confidence` was set to `"low"` (existing code: `decision.confidence = correction.wasCorrect ? "high" : "low"`). A `low` tier renders in question voice ("Were you...?") — so a fact the student just explicitly stated would be shown back to them as a question. Confidence should almost certainly go to `"high"` on an explicit correction, not `"low"`. **Not fixed in this pass** (out of scope for a verification-only pass; flagged here for a deliberate decision, not silently patched).
+6. A second, comparable save point (same document title) → restored, and the correction from step 5 was **genuinely respected**: the new reconstruction said `"Use Source A for background citation"` — it never re-asserted the corrected-away "Source B" answer. The `whatChanged` ("since your last save") diff was also correctly non-empty and accurate (`["Decided to use Source A for background citation", "Started writing the intro section"]`). This is the concrete, live proof behind the "confirmed memory outranks inference" claim in the docs — not just prompt text, an observed result.
+7. A deliberately thin save point (`userNote: "quick check"`, empty workspace context) → restored honestly as `lowContext: true` with a real, non-generic orienting question (`"What were you checking?"`), never a fabricated confident answer. One minor cosmetic note: several fields returned the literal string `"Unknown"` rather than being empty — worth a quick visual check of whether `LowContextCard` (the low-context branch of `RestoreCard.tsx`) ever renders these raw per-field values, since seeing the word "Unknown" presented as if it were a real field would undercut the "asks instead of guessing" polish. Not confirmed as user-visible; not fixed in this pass.
+8. Answering that question (`additionalContext`, `rememberContext: true`) → re-reconstructed into a real, accurate, high-confidence state (`lowContext: false`), the answer persisted on `orientingAnswer`, and — confirmed via `GET /api/memory` — a new memory row written with the student's exact answer text, verbatim.
+9. Memory edit (`PATCH /api/memory`) and forget (`DELETE /api/memory`) → both confirmed working; the edited text updated, the deleted row disappeared from a subsequent `GET /api/memory`.
+10. "Take me back" and the extension were **not** verified in this pass beyond confirming the underlying data round-trips correctly (`workspaceContext.documentTitle`/`documentContent` match what was saved on every restore above) — the actual "a browser tab opens" behavior and the extension's own popup UI both require a real browser/Chrome click-through that isn't reachable via HTTP requests. The extension leg remains the same outstanding manual step it's been all session (Manual Steps Register, step 5).
+
+**Side effect, disclosed rather than hidden:** this pass wrote real rows into the **live production database** — one test user (`qa_verify_1786210656@example.com`), three save points, one remaining `user_memory` row (the Source A/B correction; the second memory row was deliberately created, edited, and deleted as part of testing edit/delete). There is no account-deletion endpoint in this app, so this test data will remain unless removed manually via the Supabase dashboard — entirely the person's call whether that matters before submission.
+
+**Status update:** README.md's Status section's "not yet runtime-verified end-to-end" language for the correctable-memory features and the Groq path is now superseded by this pass for every item above except "Take me back" (data-only) and the extension (untested). The confidence-tier bug in item 5 and the possible "Unknown" cosmetic issue in item 7 are new, real, open findings — not previously known, not yet fixed.
+
+Unverified tester claims were removed from all docs and replaced with lived-experience framing; no evidence was invented.

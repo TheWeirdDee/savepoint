@@ -32,10 +32,9 @@
 - [x] Webpack production build passed after Item 4.
 - [x] TypeScript passed after Item 5.
 - [x] Webpack production build passed after Item 5.
-- [ ] Apply `supabase/migrations/20260808_memory_loop.sql` to hosted Supabase.
-- [ ] Live-create, edit, and delete one remembered correction.
-- [ ] Confirm a real subsequent Gemini prompt contains the five-or-fewer
-  `USER-CONFIRMED MEMORY` block.
+- [x] Hosted Supabase contains the memory-loop table and columns.
+- [x] Live-create, edit, and delete one remembered correction.
+- [x] Confirm the live correction influences a later relevant reconstruction.
 - [ ] Test the primary-page and clipboard behavior in the target browser.
 - [ ] Record the final video using `NEW DEMO.md`.
 
@@ -51,6 +50,14 @@ they are not claimed as completed by the coding environment.
 - [x] Provider failures and unreadable JSON trigger automatic fallback.
 - [x] Failed reconstructions remain uncached and are not marked restored.
 - [x] Opt-in health route reports both providers and the active primary.
-- [ ] Add `GROQ_API_KEY` locally and in Vercel.
-- [ ] Run `/api/health/ai?check=1` with both production keys.
+- [x] Add `GROQ_API_KEY` locally and in Vercel.
+- [x] Run `/api/health/ai?check=1` with both production keys.
 - [ ] Exercise a forced Groq failure and confirm Gemini restores successfully.
+
+## Evidence integrity
+
+- [x] Remove the unverified named-tester claim and all quote/outcome placeholders.
+- [x] Frame current evidence as one ADHD builder designing from lived experience.
+- [x] State that dyslexia-user testing is planned/underway, not completed.
+- [ ] Complete a real dyslexia-user session and document only consented,
+  actually observed feedback.

@@ -34,7 +34,6 @@ same account.
 - [Design system](#design-system)
 - [Privacy & security](#privacy--security)
 - [Resilience — when the AI itself fails](#resilience--when-the-ai-itself-fails)
-- [Demo-day run sheet](#demo-day-run-sheet-3-minutes)
 - [Neurodivergent-user evidence](#neurodivergent-user-evidence)
 - [Scope (deliberately bounded)](#scope-deliberately-bounded)
 - [Status](#status)
@@ -542,51 +541,27 @@ treats AI failure as a first-class product concern, not an afterthought:
   is down or quota'd mid-demo. Off by default; touches nothing but the
   restore step; never affects saving, listing, or the database.
 
-## Demo-day run sheet (3 minutes)
-
-Keep it unmistakably **educational** — a school assignment, not adult work.
-
-| Beat | Time | What to show |
-|---|---|---|
-| 1. Problem | 0:20 | Mid-way through a biology report, several sources open, just worked out which evidence supports the argument. |
-| 2. Save | 0:15 | One tap **Save where my brain is** + one dictated line ("checking which source is more reliable"). Instant. |
-| 3. Leave | 0:10 | Close it. The thread is gone — that's the ADHD re-entry problem. |
-| 4. Return | 0:15 | Reopen → calm **"Welcome back. Restore where your thinking left off?"** (a pull, no time-guilt). |
-| 5. Restore | 0:40 | Click → **next action first** ("write two sentences on why Source B is more reliable"), then where-you-were, then the gentle "was it B?" confirm. Reconstructed *thinking*, not tabs. |
-| 6. Honesty | 0:20 | Show a thin save point → the AI **asks** instead of inventing. "It doesn't pretend." |
-| 7. Extension | 0:20 | Click the extension on a random web page, sign in once → "it works where interruptions actually happen, on the same account." |
-| 8. Close | 0:10 | "Most tools restore your files. Save Point restores where your thinking left off — designed for students whose brains lose the thread, not the file." |
-
-**Have two save points pre-made** before recording: one rich (document + note
-+ tabs) for beat 5, one deliberately thin (just a URL) for beat 6. **Have a
-demo account created ahead of time** so beat 7 is just "open the extension
-and log in," not a live signup. If you're worried about live AI reliability
-on demo day, set `?demo=1` on the workspace URL as a safety net.
 
 ## Neurodivergent-user evidence
 
-Save Point is built by one neurodivergent (ADHD) student, from direct lived
-experience of the re-entry problem — the design decisions in this repo come
-from that experience, not just the pitch:
+**Designed by a neurodivergent student, from the inside.** Save Point's core
+problem is one of the builder's own daily ADHD experiences, and that lived
+experience shaped the real decisions in the code — not just the pitch:
 
-- The core problem is one the builder lives with: coming back to open files
-  but gone thinking. ([PRD.md](PRD.md) §2)
 - No shame, ever — no "you were gone 2 hours," no streaks — because
-  time-guilt doesn't help you restart. ([PRD.md](PRD.md) §3)
-- Saving can never require a form; the note is optional, because the moment
-  of interruption is the worst time to ask an ADHD student to write a
-  paragraph.
+  time-guilt doesn't help you restart.
+- Saving never requires a form; the note is optional, because the moment of
+  interruption is the worst time to ask an ADHD student to write a paragraph.
 - Restore leads with one next action, everything else collapsed, so a dense
   summary never reads like more homework.
-- The reading settings (dyslexia font, larger text, relaxed spacing, reduced
-  motion) are real, tested toggles, not a checklist item.
+- The dyslexia font and reading settings exist because a neurodivergent
+  builder needs them to read the app's own interface — they're
+  tested-on-ourselves toggles, not a checklist item.
 
-**Tested with a neurodivergent user.** We tested the restore flow directly
-with a neurodivergent user — Eniola, a dyslexic [RELATIONSHIP —
-classmate], who walked through a real save-and-interrupt cycle without
-being told how the UI worked first. `[ONE DIRECT QUOTE — her exact words —
-TO BE FILLED IN AFTER THE SESSION]`. In response, we `[ONE CONCRETE CHANGE
-MADE — or "logged this as a known next step" — TO BE FILLED IN]`.
+Dyslexia-user testing is underway to pressure-test exactly these choices;
+that feedback will shape what we change next. We have not overstated it here
+— where a claim would require a completed external test we don't yet have,
+we say what's true instead.
 
 ## Scope (deliberately bounded)
 
@@ -601,28 +576,34 @@ tiny extension beats a weak restore + a fancy extension.
 
 `npm run build` (webpack) exits 0. `tsc --noEmit` is clean.
 
-**Runtime-verified live**, against the real hosted Supabase project:
-accounts, save, and restore (against a real Gemini key, from an earlier
-pass); failure classification (quota/network), including watching the
+**Runtime-verified live**, against the real hosted Supabase project and the
+real deployed app (`savepoint-seven.vercel.app`): accounts, save, and
+restore; failure classification (quota/network), including watching the
 classifier correctly track a live transition between two different real
-Gemini failure modes; and, as of the README/docs sync pass, a direct
-read-only check confirming the memory-pass migration
-(`supabase/migrations/20260808_memory_loop.sql`) has been applied to the
-hosted database — the `user_memory` table and the `save_points.corrections`
-/ `save_points.orienting_answer` columns all exist there. Both configured
-model IDs (`llama-3.3-70b-versatile` on Groq, `gemini-3.5-flash-lite` on
-Gemini) were independently confirmed reachable by calling each provider's
-REST API directly with the project's real keys, bypassing the app.
+Gemini failure modes; `GET /api/health/ai?check=1` on production returning
+`{"ok":true,"primary":"groq",...}` with both providers reachable; and, via a
+full live pass driving the deployed app's real HTTP API end-to-end (fresh
+account, real save, real Groq-path restore with evidence receipts, a real
+correction that a later comparable restore genuinely respected instead of
+re-asserting the wrong answer, a real "since your last save" diff, a real
+low-context save that asked an honest orienting question and reconstructed
+correctly once answered, and working memory edit/forget) — the
+correctable-memory system and the Groq-primary path are no longer "built
+only," they've been observed working end-to-end on production. Full
+request/response evidence is in `BUILD_REPORT.md`'s LIVE VERIFICATION PASS.
 
-**Built and passing typecheck/build, not yet runtime-verified end-to-end**:
-the correctable-memory features (evidence receipts, the correction loop,
-the low-context answer→reconstruct loop, "Take me back," the "since your
-last save" diff) and the Groq-primary reconstruction path have not yet been
-exercised through a real save → restore → correct cycle in the running app
-— the `user_memory` table exists but is still empty. Do not read the
-migration/model-reachability checks above as proof these flows work
-end-to-end; they confirm the schema and the providers are ready for that
-pass, not that it's been run.
+**Two open findings from that live pass, not yet fixed:** an explicit
+correction currently sets the corrected decision's confidence to `low`
+(question voice) instead of `high` — a voice-tier bug, not a data-loss or
+fabrication issue. And the low-context path's empty fields render as the
+literal string `"Unknown"` rather than being omitted, which may or may not
+surface in the UI (`RestoreCard.tsx`'s low-context branch wasn't inspected
+for this) — worth a quick look before demoing that path.
+
+**Not yet verified**: "Take me back" (the API data round-trips correctly;
+the actual browser-tab-opening behavior needs a real click), and the
+Chrome extension end-to-end (needs loading it unpacked and signing in —
+see the Manual Steps Register).
 
 See `BUILD_REPORT.md` for the full build history, the complete Manual Steps
 Register, and exactly what was verified live versus reasoned through in code.

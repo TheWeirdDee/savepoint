@@ -65,7 +65,7 @@ Collaboration, teacher dashboards, automatic interruption detection, continuous/
 
 ## 10. Success — rubric mapping (IncludAI / Stanford NNEA)
 
-- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed by a neurodivergent (ADHD) student from lived experience, and tested with a dyslexic user — see [README.md](README.md#neurodivergent-user-evidence) for specifics, including what's confirmed versus still pending.
+- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed by one neurodivergent (ADHD) student from lived experience. Dyslexia-user testing is planned but not yet completed; see [README.md](README.md#neurodivergent-user-evidence).
 - **Innovation in AI — 25%:** sparse-signal fusion + confidence tiers + no-fabrication low-context path.
 - **Usability & accessibility — 25%:** one-action save, next-action-first restore, progressive disclosure, dyslexia mode, reduced motion, keyboard/ARIA.
 - **Technical execution — 10%:** clean build, shared schema, structured AI output, persistence, working extension.
@@ -73,7 +73,7 @@ Collaboration, teacher dashboards, automatic interruption detection, continuous/
 
 ## 11. Risks & mitigations
 
-- **Impact only "claimed":** mitigate with a documented ND-tester session (one quote + one design change).
+- **External usability evidence is still pending:** run a real dyslexia-user session and document only feedback actually received.
 - **AI fabricates on thin input:** mitigate with the low-context path + defensive JSON parse + safe fallback.
 - **Over-building for 10% technical while under-serving 80% impact/innovation/usability:** hold scope to the non-goals.
 - **Extension mobile confusion:** never claim mobile; document desktop-only.

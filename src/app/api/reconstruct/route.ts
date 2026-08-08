@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // POST /api/reconstruct — load a save point owned by the signed-in user,
-// reconstruct its cognitive state via Gemini, cache the result on the row,
+// reconstruct its cognitive state through the provider orchestrator, cache it,
 // mark it restored, return it. Body: { savePointId: string, force?: boolean }
 //
 // Response is always { ok: true, state, savePoint? } or

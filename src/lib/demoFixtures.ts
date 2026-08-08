@@ -2,7 +2,7 @@ import type { ReconstructedState, SavePoint } from "./types";
 
 // DEMO DATA — never real. Used only when demo mode is explicitly on
 // (NEXT_PUBLIC_DEMO_MODE=1, or ?demo=1 on /workspace), so the save→restore
-// experience can be shown even if the live Gemini key is down or quota'd.
+// experience can be shown even if the live AI providers are down or quota'd.
 // See isDemoMode() / restoreSavePoint() in src/lib/client.ts — that is the
 // ONLY place this fixture is used, and it never touches the database, so it
 // can never be mistaken for (or persisted as) a real reconstruction.
