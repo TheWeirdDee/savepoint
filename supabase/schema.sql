@@ -46,6 +46,9 @@ create table public.save_points (
 
   -- AI reconstruction (filled on first Restore, then cached).
   reconstruction  jsonb,
+  -- Only memories the student explicitly confirmed or corrected are reused.
+  corrections     jsonb not null default '[]'::jsonb,
+  orienting_answer text,
 
   -- Restore tracking — drives the calm "Welcome back" offer on workspace load.
   restored        boolean not null default false,
@@ -60,8 +63,20 @@ create index if not exists save_points_user_created_idx
 create index if not exists save_points_user_unrestored_idx
   on public.save_points (user_id, restored, created_at desc);
 
+create table if not exists public.user_memory (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  text text not null,
+  origin_save_point_id uuid references public.save_points(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists user_memory_user_created_idx
+  on public.user_memory (user_id, created_at desc);
+
 -- Lock both tables down. The server uses the service role key, which bypasses
 -- RLS. No public policies are created on purpose: the anon/public role cannot
 -- read or write directly.
 alter table public.users enable row level security;
 alter table public.save_points enable row level security;
+alter table public.user_memory enable row level security;

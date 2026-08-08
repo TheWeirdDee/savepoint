@@ -64,6 +64,13 @@ export function RestorePreview({ onSeeExample }: { onSeeExample: () => void }) {
           See an example restore →
         </button>
       </div>
+
+      <p className="mx-auto mt-5 max-w-md text-center text-sm text-ink-soft">
+        You don&apos;t have to remember to save. Save Point keeps a local
+        draft and offers to hold your place when you go quiet — and it only
+        ever looks at what you&apos;re writing here, never your other tabs
+        or history.
+      </p>
     </div>
   );
 }

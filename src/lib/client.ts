@@ -11,6 +11,7 @@ import type {
   LoginInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  UserMemory,
 } from "./types";
 import { DEMO_RECONSTRUCTED_STATE } from "./demoFixtures";
 
@@ -45,24 +46,89 @@ export function savePointLabel(sp: SavePoint): string {
   return "Saved session";
 }
 
-// --- Draft document persistence (so the workspace itself survives a reload) ---
+// --- Local safety-net draft (SAFETY-NET PASS) ---
+//
+// The only place workspace content is written outside an explicit save: a
+// plain localStorage draft of the document already in front of the student,
+// keyed per-user, so the workspace survives a reload AND a forgotten save
+// never means losing what was typed. This never reaches the DB or the AI —
+// only an explicit "Save my place" tap (the student's own, or one offered
+// by the banner/idle prompt below) turns it into a real save point. It
+// observes nothing but this document: no other tabs, no history, no
+// background capture.
 
-const DOC_KEY = "savepoint.doc";
-const DOC_TITLE_KEY = "savepoint.docTitle";
+export type WorkspaceDraft = {
+  title: string;
+  content: string;
+  updatedAt: string;
+  /** Set once this exact draft has been turned into a real save point. */
+  savedIntoPointId: string | null;
+  /** Set when the student dismisses the "you forgot to save" banner for this draft. */
+  dismissedAt: string | null;
+};
+
 const LAST_SAVED_DOC_KEY = "savepoint.lastSavedDoc";
 
-export function loadDraft(): { title: string; content: string } {
-  if (typeof window === "undefined") return { title: "", content: "" };
-  return {
-    title: localStorage.getItem(DOC_TITLE_KEY) ?? "",
-    content: localStorage.getItem(DOC_KEY) ?? "",
-  };
+function draftKey(userId: string): string {
+  return `savepoint.draft.${userId}`;
 }
 
-export function saveDraft(title: string, content: string): void {
+export function loadDraft(userId: string): WorkspaceDraft | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(draftKey(userId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as WorkspaceDraft;
+  } catch {
+    return null;
+  }
+}
+
+// Called on every debounced edit, and again on beforeunload — localStorage
+// writes are synchronous, so it's safe to call directly from an unload
+// handler with no flush delay. A fresh edit always clears any prior
+// savedIntoPointId/dismissedAt: new content is, by definition, unsaved again.
+export function writeDraft(userId: string, title: string, content: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DOC_TITLE_KEY, title);
-  localStorage.setItem(DOC_KEY, content);
+  if (!title.trim() && !content.trim()) {
+    localStorage.removeItem(draftKey(userId));
+    return;
+  }
+  const existing = loadDraft(userId);
+  const unchanged = existing?.title === title && existing?.content === content;
+  const draft: WorkspaceDraft = {
+    title,
+    content,
+    updatedAt: new Date().toISOString(),
+    savedIntoPointId: unchanged ? existing.savedIntoPointId : null,
+    dismissedAt: unchanged ? existing.dismissedAt : null,
+  };
+  localStorage.setItem(draftKey(userId), JSON.stringify(draft));
+}
+
+// Marks the current draft as captured by a real save point, so the
+// "you forgot to save" banner never fires for content that's already saved.
+export function markDraftSaved(userId: string, savePointId: string): void {
+  if (typeof window === "undefined") return;
+  const existing = loadDraft(userId);
+  if (!existing) return;
+  localStorage.setItem(
+    draftKey(userId),
+    JSON.stringify({ ...existing, savedIntoPointId: savePointId })
+  );
+}
+
+// Marks the current draft acknowledged so the same unsaved content doesn't
+// nag again. A later edit produces a newer draft via writeDraft above, which
+// clears dismissedAt on its own — so resumed work re-arms the banner.
+export function dismissDraft(userId: string): void {
+  if (typeof window === "undefined") return;
+  const existing = loadDraft(userId);
+  if (!existing) return;
+  localStorage.setItem(
+    draftKey(userId),
+    JSON.stringify({ ...existing, dismissedAt: new Date().toISOString() })
+  );
 }
 
 // Text added since the last save point — a cheap "what were you just doing" signal.
@@ -189,7 +255,9 @@ export function isDemoMode(): boolean {
 
 export async function restoreSavePoint(
   savePointId: string,
-  force = false
+  force = false,
+  additionalContext?: string,
+  rememberContext = false
 ): Promise<ReconstructOutcome> {
   if (isDemoMode()) {
     return { ok: true, state: DEMO_RECONSTRUCTED_STATE };
@@ -200,7 +268,7 @@ export async function restoreSavePoint(
     res = await fetch("/api/reconstruct", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ savePointId, force }),
+      body: JSON.stringify({ savePointId, force, additionalContext, rememberContext }),
     });
   } catch {
     return {
@@ -224,6 +292,9 @@ export async function restoreSavePoint(
   }
 
   if (data.ok === true && data.state) {
+    if (rememberContext) {
+      window.dispatchEvent(new Event("savepoint-memory-changed"));
+    }
     return { ok: true, state: data.state };
   }
   if (data.ok === false && data.kind) {
@@ -241,15 +312,62 @@ export async function correctDecision(
   decisionIndex: number,
   wasCorrect: boolean,
   correctedText?: string
-): Promise<void> {
-  await fetch("/api/save-points", {
+): Promise<SavePoint> {
+  const res = await fetch("/api/save-points", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       savePointId,
       correction: { decisionIndex, wasCorrect, correctedText },
     }),
-  }).catch(() => {
-    /* best-effort — the student's own memory is the source of truth here */
   });
+  const data = await parseJson(res);
+  window.dispatchEvent(new Event("savepoint-memory-changed"));
+  return data.savePoint as SavePoint;
+}
+
+export async function markSavePointRestored(savePointId: string): Promise<SavePoint> {
+  const res = await fetch("/api/save-points", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ savePointId, markRestored: true }),
+  });
+  const data = await parseJson(res);
+  return data.savePoint as SavePoint;
+}
+
+export async function listUserMemory(): Promise<UserMemory[]> {
+  const res = await fetch("/api/memory");
+  const data = await parseJson(res);
+  return data.memories as UserMemory[];
+}
+
+export async function createUserMemory(
+  text: string,
+  originSavePointId?: string
+): Promise<UserMemory> {
+  const res = await fetch("/api/memory", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, originSavePointId }),
+  });
+  const data = await parseJson(res);
+  return data.memory as UserMemory;
+}
+
+export async function updateUserMemory(id: string, text: string): Promise<UserMemory> {
+  const res = await fetch("/api/memory", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, text }),
+  });
+  const data = await parseJson(res);
+  return data.memory as UserMemory;
+}
+
+export async function deleteUserMemory(id: string): Promise<void> {
+  const res = await fetch(`/api/memory?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  await parseJson(res);
 }

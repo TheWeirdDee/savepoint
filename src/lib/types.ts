@@ -31,20 +31,42 @@ export type SavePointCapture = {
  */
 export type Confidence = "high" | "medium" | "low";
 
+export type EvidenceSource =
+  | "note"
+  | "recent-writing"
+  | "selection"
+  | "active-page"
+  | "open-tab";
+
+export type ReconstructionEvidence = {
+  source: EvidenceSource;
+  /** A short quote or plain description of the captured signal. Never hidden reasoning. */
+  excerpt: string;
+};
+
+export type ReconstructedField = {
+  text: string;
+  confidence: Confidence;
+  evidence: ReconstructionEvidence[];
+};
+
 export type ReconstructedState = {
-  objective: { text: string; confidence: Confidence };
-  stoppingPoint: { text: string; confidence: Confidence };
-  mainThread: { text: string; confidence: Confidence };
+  objective: ReconstructedField;
+  stoppingPoint: ReconstructedField;
+  mainThread: ReconstructedField;
   decisions: Array<{
     text: string;
     confidence: Confidence;
     needsConfirmation: boolean;
+    evidence: ReconstructionEvidence[];
   }>;
   openThreads: Array<{
     text: string;
     relevance: "primary" | "supporting" | "uncertain";
   }>;
-  nextAction: { text: string; confidence: Confidence };
+  nextAction: ReconstructedField;
+  /** A short cross-session cognitive diff. Empty when there is no comparable prior save. */
+  whatChanged: string[];
   /** When signal is too thin to reconstruct honestly, the AI sets this and asks one orienting question. */
   lowContext: boolean;
   /** The single orienting question shown in low-context mode. Empty otherwise. */
@@ -80,6 +102,12 @@ export type SavePoint = {
   openTabs: NonNullable<SavePointCapture["openTabs"]>;
   workspaceContext: NonNullable<SavePointCapture["workspaceContext"]>;
   reconstruction: ReconstructedState | null;
+  corrections: Array<{
+    originalText: string;
+    correctedText: string;
+    createdAt: string;
+  }>;
+  orientingAnswer: string | null;
   restored: boolean;
   restoredAt: string | null;
   createdAt: string;
@@ -92,6 +120,18 @@ export type SavePointPatch = {
   savePointId: string;
   correction?: { decisionIndex: number; wasCorrect: boolean; correctedText?: string };
   markRestored?: boolean;
+};
+
+export type ReconstructionMemory = {
+  confirmedMemories: string[];
+  previousCapture?: SavePointCapture;
+};
+
+export type UserMemory = {
+  id: string;
+  text: string;
+  originSavePointId: string | null;
+  createdAt: string;
 };
 
 // --- Accounts ---

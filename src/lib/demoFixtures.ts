@@ -10,20 +10,27 @@ export const DEMO_RECONSTRUCTED_STATE: ReconstructedState = {
   objective: {
     text: "You're comparing sources for your biology report on cell division, deciding which one to cite as the stronger reference.",
     confidence: "high",
+    evidence: [{ source: "note", excerpt: "still weighing Source A vs Source B" }],
   },
   stoppingPoint: {
     text: "You'd just finished comparing the publication dates and peer-review status of Source A and Source B.",
     confidence: "high",
+    evidence: [{ source: "recent-writing", excerpt: "Source A was published in 2019; Source B is peer reviewed." }],
   },
   mainThread: {
     text: "Source B looks stronger because it's a recent, peer-reviewed journal article, but you hadn't checked the author's credentials yet.",
     confidence: "high",
+    evidence: [
+      { source: "recent-writing", excerpt: "Source B is a recent peer-reviewed journal article." },
+      { source: "note", excerpt: "still weighing Source A vs Source B" },
+    ],
   },
   decisions: [
     {
       text: "It looks like you'd leaned toward Source B as the more reliable choice.",
       confidence: "medium",
       needsConfirmation: true,
+      evidence: [{ source: "note", excerpt: "still weighing Source A vs Source B" }],
     },
   ],
   openThreads: [
@@ -33,7 +40,12 @@ export const DEMO_RECONSTRUCTED_STATE: ReconstructedState = {
   nextAction: {
     text: "Look up the author of Source A to check their credentials.",
     confidence: "high",
+    evidence: [{ source: "recent-writing", excerpt: "Need to check the authors before choosing." }],
   },
+  whatChanged: [
+    "You moved from collecting sources to checking which one is credible enough to cite.",
+    "The choice between Source A and Source B is still open.",
+  ],
   lowContext: false,
   orientingQuestion: "",
 };
@@ -56,6 +68,8 @@ export const EXAMPLE_SAVE_POINT: SavePoint = {
     documentTitle: "Biology report",
   },
   reconstruction: DEMO_RECONSTRUCTED_STATE,
+  corrections: [],
+  orientingAnswer: null,
   restored: true,
   restoredAt: null,
   createdAt: new Date(0).toISOString(),

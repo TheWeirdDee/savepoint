@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SavePoint, SavePointCapture, ReconstructOutcome, AuthUser } from "@/lib/types";
 import {
@@ -9,19 +9,39 @@ import {
   listSavePoints,
   restoreSavePoint,
   loadDraft,
-  saveDraft,
+  writeDraft,
+  markDraftSaved,
+  dismissDraft,
   markDocSaved,
+  markSavePointRestored,
   logout,
+  type WorkspaceDraft,
 } from "@/lib/client";
 import { SavePointButton } from "./SavePointButton";
 import { RestoreOffer } from "./RestoreOffer";
 import { RestoreCard } from "./RestoreCard";
 import { RestorePreview } from "./RestorePreview";
+import { SavePlacePrompt } from "./SavePlacePrompt";
 import { SavePointList } from "./SavePointList";
 import { AccessibilityBar } from "./AccessibilityBar";
 import { PendingCaptureCard } from "./PendingCaptureCard";
 import { MarkerDot } from "./MarkerDot";
+import { MemoryPanel } from "./MemoryPanel";
 import { DEMO_RECONSTRUCTED_STATE, EXAMPLE_SAVE_POINT } from "@/lib/demoFixtures";
+
+// SAFETY-NET PASS: how long the student can go without editing the workspace
+// document before a gentle "want me to save your place?" offer appears.
+// Local, workspace-only activity — see the effect below for the exact
+// two signals this reads (edit happened / timer elapsed), nothing else.
+const IDLE_OFFER_MS = 120_000;
+
+function draftLabel(draft: WorkspaceDraft): string {
+  const title = draft.title.trim();
+  if (title) return title;
+  const content = draft.content.trim();
+  if (!content) return "your last session";
+  return content.length > 60 ? content.slice(0, 60).trimEnd() + "…" : content;
+}
 
 // What the mobile bookmarklet (see /docs) packs into ?capture= — the same
 // scope as the extension's activeContext, nothing more.
@@ -37,6 +57,16 @@ type View =
   | { mode: "restoring"; savePoint: SavePoint }
   | { mode: "restored"; savePoint: SavePoint; outcome: ReconstructOutcome };
 
+function safeWebUrl(value?: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export function Workspace({ user }: { user: AuthUser }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,17 +79,40 @@ export function Workspace({ user }: { user: AuthUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [pendingCapture, setPendingCapture] = useState<BookmarkletCapture | null>(null);
   const [showExample, setShowExample] = useState(false);
+  const [forgottenDraft, setForgottenDraft] = useState<WorkspaceDraft | null>(null);
+  const [idleOffer, setIdleOffer] = useState(false);
+  const [safetySaving, setSafetySaving] = useState(false);
+  const hydratedRef = useRef(false);
+  // What's actually been saved so far — starts empty, and is only ever
+  // updated the moment a real save point is created (see handleSave). This
+  // is what "unsaved changes" is measured against, so the idle offer can
+  // never fire for content that's already been saved.
+  const lastSavedRef = useRef<{ title: string; content: string }>({ title: "", content: "" });
 
   // A genuinely blank workspace — nothing typed yet. This is the moment the
   // preview and the example button exist for; the instant there's real
   // content, the promise has done its job and gets out of the way.
   const isEmpty = !title.trim() && !content.trim();
 
+  const hasUnsavedChanges =
+    (title.trim() !== "" || content.trim() !== "") &&
+    (title !== lastSavedRef.current.title || content !== lastSavedRef.current.content);
+
   // Load draft + past save points on mount. The unrestored one becomes the offer.
   useEffect(() => {
-    const draft = loadDraft();
-    setTitle(draft.title);
-    setContent(draft.content);
+    const draft = loadDraft(user.id);
+    if (draft) {
+      setTitle(draft.title);
+      setContent(draft.content);
+      if (draft.savedIntoPointId) {
+        // This exact content is already captured in a real save point —
+        // nothing unsaved here, so seed the baseline to match.
+        lastSavedRef.current = { title: draft.title, content: draft.content };
+      } else if (!draft.dismissedAt) {
+        setForgottenDraft(draft);
+      }
+    }
+    hydratedRef.current = true;
     listSavePoints()
       .then(({ savePoints, latestUnrestored }) => {
         setSavePoints(savePoints);
@@ -68,13 +121,31 @@ export function Workspace({ user }: { user: AuthUser }) {
       .catch(() => {
         /* offline / not configured — workspace still usable */
       });
-  }, []);
+  }, [user.id]);
 
   // Persist the draft as they type so the workspace itself survives a reload.
   useEffect(() => {
-    const t = setTimeout(() => saveDraft(title, content), 400);
+    if (!hydratedRef.current) return;
+    const t = setTimeout(() => writeDraft(user.id, title, content), 400);
     return () => clearTimeout(t);
-  }, [title, content]);
+  }, [user.id, title, content]);
+
+  useEffect(() => {
+    const persistNow = () => writeDraft(user.id, title, content);
+    window.addEventListener("beforeunload", persistNow);
+    return () => window.removeEventListener("beforeunload", persistNow);
+  }, [user.id, title, content]);
+
+  // Idle-activity timer — the only two signals this reads are "the workspace
+  // input changed" (this effect's dependencies) and "a timer elapsed with no
+  // change" (the setTimeout below). No other tab, no history, no background
+  // capture. It only ever arms while there's something unsaved to lose.
+  useEffect(() => {
+    setIdleOffer(false);
+    if (!hasUnsavedChanges) return;
+    const timer = window.setTimeout(() => setIdleOffer(true), IDLE_OFFER_MS);
+    return () => window.clearTimeout(timer);
+  }, [title, content, hasUnsavedChanges]);
 
   // The mobile bookmarklet fallback (see /docs) lands here with ?capture=,
   // since it has no way to authenticate directly the way the extension does
@@ -120,11 +191,36 @@ export function Workspace({ user }: { user: AuthUser }) {
       const capture = buildWorkspaceCapture(title, content, note);
       const sp = await createSavePoint(capture);
       markDocSaved(content);
+      markDraftSaved(user.id, sp.id);
+      lastSavedRef.current = { title, content };
       setSavePoints((prev) => [sp, ...prev]);
       setOffer(null);
+      setForgottenDraft(null);
+      setIdleOffer(false);
     },
-    [title, content]
+    [title, content, user.id]
   );
+
+  const saveFromSafetyNet = useCallback(async () => {
+    setSafetySaving(true);
+    try {
+      await handleSave("");
+    } finally {
+      setSafetySaving(false);
+    }
+  }, [handleSave]);
+
+  // Only the on-load "you forgot to save" banner persists its dismissal —
+  // that's the one tied to a specific draft that should stay quiet on the
+  // next reload. The idle offer's "Not now" is scoped to the current idle
+  // stretch only (see the idle-timer effect above), never written to
+  // localStorage, so it never accidentally silences a genuine unsaved-draft
+  // warning on a later visit.
+  const dismissSafetyNet = useCallback(() => {
+    if (forgottenDraft) dismissDraft(user.id);
+    setForgottenDraft(null);
+    setIdleOffer(false);
+  }, [user.id, forgottenDraft]);
 
   const openRestore = useCallback(async (sp: SavePoint, force = false) => {
     setView({ mode: "restoring", savePoint: sp });
@@ -150,6 +246,57 @@ export function Workspace({ user }: { user: AuthUser }) {
     (sp: SavePoint) => openRestore(sp, true),
     [openRestore]
   );
+
+  const addOrientingContext = useCallback(async (
+    sp: SavePoint,
+    answer: string,
+    remember: boolean
+  ) => {
+    setView({ mode: "restoring", savePoint: sp });
+    const outcome = await restoreSavePoint(sp.id, true, answer, remember);
+    setView({ mode: "restored", savePoint: sp, outcome });
+  }, []);
+
+  const takeMeBack = useCallback((sp: SavePoint, outcome: ReconstructOutcome) => {
+    if (!outcome.ok) return;
+    const activeUrl = safeWebUrl(sp.activeContext.url);
+    if (activeUrl) {
+      window.open(activeUrl, "_blank", "noopener,noreferrer");
+    }
+    navigator.clipboard?.writeText(outcome.state.nextAction.text).catch(() => {});
+    markSavePointRestored(sp.id).catch(() => {
+      /* Reconstruction already marks it restored; returning must never get stuck. */
+    });
+
+    if (sp.source === "workspace") {
+      const restoredTitle = sp.workspaceContext.documentTitle ?? "";
+      const restoredContent = sp.workspaceContext.documentContent ?? "";
+      setTitle(restoredTitle);
+      setContent(restoredContent);
+      // This content already exists as a real save point — it isn't
+      // "unsaved" the moment it lands back in the editor, so the idle
+      // offer shouldn't arm for it until they actually change something.
+      lastSavedRef.current = { title: restoredTitle, content: restoredContent };
+      setView({ mode: "writing" });
+    }
+  }, []);
+
+  const updateSavePoint = useCallback((updated: SavePoint) => {
+    setSavePoints((previous) =>
+      previous.map((point) => (point.id === updated.id ? updated : point))
+    );
+    setView((current) =>
+      current.mode === "restored" && current.savePoint.id === updated.id
+        ? {
+            ...current,
+            savePoint: updated,
+            outcome: updated.reconstruction
+              ? { ok: true, state: updated.reconstruction }
+              : current.outcome,
+          }
+        : current
+    );
+  }, []);
 
   const backToWriting = useCallback(() => {
     setView({ mode: "writing" });
@@ -206,6 +353,7 @@ export function Workspace({ user }: { user: AuthUser }) {
           </div>
 
           <AccessibilityBar variant="inline" />
+          <MemoryPanel />
 
           {/* Desktop only — extensions don't run on mobile, so this would
               just be confusing clutter there. See the mobile box below. */}
@@ -242,6 +390,26 @@ export function Workspace({ user }: { user: AuthUser }) {
 
         {/* MAIN PANE */}
         <main className="min-w-0">
+          {(forgottenDraft || idleOffer) && view.mode === "writing" && (
+            <div className="mb-6">
+              <SavePlacePrompt
+                message={
+                  forgottenDraft ? (
+                    <>
+                      You were working on <strong>&ldquo;{draftLabel(forgottenDraft)}&rdquo;</strong> and
+                      didn&apos;t save your place. Want me to hold it?
+                    </>
+                  ) : (
+                    <>Looks like you stepped away — want me to save your place?</>
+                  )
+                }
+                dismissLabel={forgottenDraft ? "Dismiss" : "Not now"}
+                saving={safetySaving}
+                onSave={saveFromSafetyNet}
+                onDismiss={dismissSafetyNet}
+              />
+            </div>
+          )}
           {/* Landing spot for the mobile bookmarklet fallback */}
           {pendingCapture && view.mode === "writing" && (
             <div className="mb-6">
@@ -279,6 +447,11 @@ export function Workspace({ user }: { user: AuthUser }) {
                 savePoint={view.savePoint}
                 outcome={view.outcome}
                 onRetry={() => retryRestore(view.savePoint)}
+                onAddContext={(answer, remember) =>
+                  addOrientingContext(view.savePoint, answer, remember)
+                }
+                onTakeBack={() => takeMeBack(view.savePoint, view.outcome)}
+                onSavePointUpdated={updateSavePoint}
               />
               <button
                 onClick={backToWriting}

@@ -1299,3 +1299,364 @@ live instead.
   Tailwind breakpoint classes (`hidden lg:block` / `lg:hidden`) and the
   disclosure's `aria-expanded` state were verified by reading the compiled
   markup and component logic, not by an actual narrow-viewport screenshot.
+
+---
+
+## CORRECTABLE MEMORY PASS
+
+This pass implements all five requested items. The safe additive migration is
+`supabase/migrations/20260808_memory_loop.sql`; it must be applied to the
+hosted Supabase project before live database verification. Static verification,
+TypeScript validation, and a webpack production build were completed after
+every item. No git commands that mutate repository history were run.
+
+### Item 1 — Complete correction loop: completed
+
+**What changed**
+
+- Added the user-owned `user_memory` table and authenticated list/create/edit/
+  delete API.
+- A “No, not quite” correction updates the visible reconstruction, preserves
+  the raw correction on its save point, and writes a concise authoritative
+  memory record. If the save-point update fails, the new memory row is rolled
+  back.
+- The five newest confirmed memories are injected into every reconstruction.
+- The collapsed “What Save Point remembers” panel makes memory visible,
+  editable, and deletable.
+
+**Quoted implementation evidence**
+
+- Schema: `supabase/migrations/20260808_memory_loop.sql:9` —
+  `create table if not exists public.user_memory`.
+- Correction persistence: `src/app/api/save-points/route.ts:157` —
+  `The student corrected "${originalText}" to "${correction.correctedText.trim()}".`
+- Prompt injection: `src/lib/reconstruct-prompt.ts:97` —
+  `USER-CONFIRMED MEMORY (the student stated these; never contradict or override them)`.
+- Transparency: `src/components/MemoryPanel.tsx:65` —
+  `What Save Point remembers`; edit/forget controls are at lines 119 and 126.
+
+**Honesty audit**
+
+- Only an explicit correction or an explicitly opted-in recovery answer is
+  stored. No behavior-derived preference, diagnosis, or psychological profile
+  is created.
+- Student memory is labelled authoritative in the system prompt.
+- Memory is visible, editable, and deletable.
+
+**Verification after Item 1**
+
+- `npm run typecheck` — exit 0.
+- `npm run build` (`next build --webpack`) — exit 0; `/api/memory`
+  present in the generated route table.
+
+### Item 2 — Evidence provenance: completed
+
+**What changed**
+
+- Important fields carry at most two evidence receipts.
+- Normalization accepts only note, recent-writing, selection, active-page, or
+  open-tab sources and truncates excerpts to 140 characters.
+- The model is explicitly told to lower confidence rather than invent evidence.
+- “Why I think this” remains collapsed and is omitted when there is no evidence.
+
+**Quoted implementation evidence**
+
+- Prompt guardrail: `src/lib/reconstruct-prompt.ts:30` —
+  `Evidence is input provenance, never hidden reasoning`.
+- Runtime allow-list: `src/lib/reconstruct.ts:118` —
+  `const evidenceSources: EvidenceSource[]`.
+- Hard excerpt cap: `src/lib/reconstruct.ts:132` —
+  `excerpt.slice(0, 140)`.
+- Collapsed UI: `src/components/RestoreCard.tsx:185` —
+  `Why I think this`.
+
+**Honesty audit**
+
+- Evidence can cite only raw captured input. Previous AI output and user-memory
+  rows cannot masquerade as evidence.
+- No chain-of-thought is requested, stored, or rendered.
+
+**Verification after Item 2**
+
+- `npm run typecheck` — exit 0.
+- `npm run build` (`next build --webpack`) — exit 0.
+
+### Item 3 — Low-context recovery: completed
+
+**What changed**
+
+- The low-context card accepts a one-sentence answer and forces a fresh
+  reconstruction with that answer merged into the capture as a recovery note.
+- The answer is persisted on the save point.
+- Reusable memory is opt-in through an unchecked checkbox; the UI says it can
+  be edited or forgotten later.
+
+**Quoted implementation evidence**
+
+- Recovery input: `src/components/RestoreCard.tsx:382` —
+  `I was trying to…`.
+- Explicit consent: `src/components/RestoreCard.tsx:399` —
+  `Remember my exact answer for related work. I can edit or forget it later.`
+- Server merge/persistence: `src/app/api/reconstruct/route.ts:64` and line
+  149 (`orienting_answer`).
+
+**Honesty audit**
+
+- The answer becomes reusable memory only when the student checks the opt-in.
+- The stored value is the student's exact text, not an inferred preference.
+
+**Verification after Item 3**
+
+- `npm run typecheck` — exit 0.
+- `npm run build` (`next build --webpack`) — exit 0.
+
+### Item 4 — Take me back: completed
+
+**What changed**
+
+- The direct click opens only the sanitized active HTTP(S) page, copies the
+  next action, and explicitly marks the save restored.
+- Workspace captures return to their exact saved title/content.
+- Extra pages are capped at three and rendered as individual opt-in links;
+  there is no fragile batch popup and no automatic tab flood.
+
+**Quoted implementation evidence**
+
+- URL safety: `src/components/Workspace.tsx:60` — `safeWebUrl`.
+- Restored mutation: `src/lib/client.ts:330` —
+  `markSavePointRestored`.
+- Primary action: `src/components/RestoreCard.tsx:76` — `Take me back`.
+- Popup-safe extras: `src/components/RestoreCard.tsx:86` —
+  `Open up to 3 related pages`.
+
+**Honesty audit**
+
+- No tab opens without a user click.
+- Only the primary active page is opened programmatically; optional pages stay
+  visible as individual links.
+
+**Verification after Item 4**
+
+- `npm run typecheck` — exit 0.
+- `npm run build` (`next build --webpack`) — exit 0.
+
+### Item 5 — What changed since your last save: completed
+
+**What changed**
+
+- Matching uses the same normalized document title or exact active URL.
+- The prior raw snapshot—not prior model prose—is sent for comparison.
+- The model returns at most four restrained changes; code forces an empty list
+  when no comparable prior snapshot exists.
+- The continuity section is collapsed by default.
+
+**Quoted implementation evidence**
+
+- Raw snapshot block: `src/lib/reconstruct-prompt.ts:107` —
+  `PREVIOUS RAW SNAPSHOT FOR THE SAME WORK`.
+- First-save guard: `src/lib/reconstruct.ts:64` —
+  `if (!memory?.previousCapture) state.whatChanged = []`.
+- Four-item cap: `src/lib/reconstruct.ts:185` — `slice(0, 4)`.
+- Collapsed presentation: `src/components/RestoreCard.tsx:112` —
+  `Since your last save`.
+
+**Honesty audit**
+
+- Continuity compares captured inputs and is omitted when unsupported.
+- It does not expand into a learner profile, knowledge graph, or passive
+  monitoring system.
+
+**Verification after Item 5**
+
+- `npm run typecheck` — exit 0.
+- `npm run build` (`next build --webpack`) — exit 0.
+
+### Runtime boundary
+
+The hosted database migration was not applied from this coding environment
+because no database DDL credential/connection is available here. Therefore the
+following claims are **implementation-verified but still require the documented
+manual live check after applying the migration**: creating/editing/deleting a
+real `user_memory` row, observing the subsequent real Gemini request, opening
+a browser tab, and reading the system clipboard. No runtime result or user
+outcome was fabricated.
+
+All five items are completed in code; none are deferred.
+
+## SAFETY-NET PASS — a forgotten save no longer means losing your place
+
+The product's sharpest weakness: the whole tool depended on the student
+*remembering* to save at the exact moment their attention broke — precisely
+when an ADHD student has the least capacity to remember. This pass closes
+that gap with the narrow, honest version specified: two local signals only
+("the workspace input changed" and "a timer elapsed with no change"), never
+background monitoring, never a read of any other tab, window, or history.
+
+**Part 1 — local draft, zero monitoring.** `src/lib/client.ts` adds a
+per-user `WorkspaceDraft` written to `localStorage` only, debounced as the
+student types and flushed again on `beforeunload`:
+
+```ts
+export function writeDraft(userId: string, title: string, content: string): void {
+  if (typeof window === "undefined") return;
+  if (!title.trim() && !content.trim()) {
+    localStorage.removeItem(draftKey(userId));
+    return;
+  }
+  const existing = loadDraft(userId);
+  const unchanged = existing?.title === title && existing?.content === content;
+  const draft: WorkspaceDraft = {
+    title,
+    content,
+    updatedAt: new Date().toISOString(),
+    savedIntoPointId: unchanged ? existing.savedIntoPointId : null,
+    dismissedAt: unchanged ? existing.dismissedAt : null,
+  };
+  localStorage.setItem(draftKey(userId), JSON.stringify(draft));
+}
+```
+
+`Workspace.tsx` calls this from a 400ms-debounced effect and again,
+undebounced, from a `beforeunload` listener so closing the tab mid-keystroke
+never loses the last few characters:
+
+```ts
+useEffect(() => {
+  const persistNow = () => writeDraft(user.id, title, content);
+  window.addEventListener("beforeunload", persistNow);
+  return () => window.removeEventListener("beforeunload", persistNow);
+}, [user.id, title, content]);
+```
+
+On mount, if a draft exists that was never turned into a real save point and
+hasn't been dismissed, the on-load banner appears with the spec's literal
+copy — **"You were working on '[title]' and didn't save your place. Want me
+to hold it?"** — with **Save my place** / **Dismiss** actions. "Save my
+place" runs through the exact same `handleSave` the student's own Save
+button uses (`POST /api/save-points`, `source: "workspace"`) — not a
+parallel code path. "Dismiss" persists `dismissedAt` on that draft so it
+doesn't nag again for the same content; a later edit produces a newer draft
+via `writeDraft` above, which clears `dismissedAt` on its own, so resumed
+work re-arms the banner honestly instead of staying silenced forever.
+
+**Part 2 — idle offer, gated strictly on unsaved changes.** The idle timer
+reads only two things: the workspace input changing, and 120 seconds
+elapsing without another change. Critically, it does not fire on mere
+non-empty content — it's gated on an actual unsaved-vs-last-saved
+comparison, so it can never nag about content that's already saved:
+
+```ts
+const hasUnsavedChanges =
+  (title.trim() !== "" || content.trim() !== "") &&
+  (title !== lastSavedRef.current.title || content !== lastSavedRef.current.content);
+
+// Idle-activity timer — the only two signals this reads are "the workspace
+// input changed" (this effect's dependencies) and "a timer elapsed with no
+// change" (the setTimeout below). No other tab, no history, no background
+// capture. It only ever arms while there's something unsaved to lose.
+useEffect(() => {
+  setIdleOffer(false);
+  if (!hasUnsavedChanges) return;
+  const timer = window.setTimeout(() => setIdleOffer(true), IDLE_OFFER_MS);
+  return () => window.clearTimeout(timer);
+}, [title, content, hasUnsavedChanges]);
+```
+
+`lastSavedRef` is updated the instant a real save point is created
+(`handleSave`) and again when a past save point's content is reloaded into
+the editor via "take me back" — both moments where the current content
+genuinely stops being "unsaved." Skipping either update was caught and
+fixed during this pass: without them, the idle offer could fire moments
+after a fresh save (a false, patronizing nag on already-saved work) or
+after reopening old, already-saved content into the editor (risking a
+duplicate save point if accepted). The offer shows the spec's literal copy
+— **"Looks like you stepped away — want me to save your place?"** — with
+**Save my place** / **Not now**. "Not now" only clears in-memory state; it
+deliberately does *not* call `dismissDraft`, so an idle-offer dismissal can
+never silently suppress the Part 1 on-load banner on a later visit for
+content that was genuinely never saved — that persistence is reserved for
+an explicit Part 1 "Dismiss." No prompt in either part references elapsed
+time (no "idle for 3 minutes," no "2 hours ago").
+
+**Part 3 — the promise, stated plainly.** Added to the empty-workspace
+preview (`RestorePreview.tsx`) and to `/docs#privacy`, which already
+documented the "no background monitoring" claim and needed this pass's
+local-draft/idle-timer behavior folded in honestly rather than left
+undocumented:
+
+> You don't have to remember to save. Save Point keeps a local draft and
+> offers to hold your place when you go quiet — and it only ever looks at
+> what you're writing here, never your other tabs or history.
+
+**Scope coherence.** The PRD lists "automatic interruption detection /
+continuous passive monitoring" as a non-goal. This pass does not cross that
+line: it reads exactly two local signals (workspace-document edits and a
+client-side timer), writes only to `localStorage`, and sends nothing
+server-side except through the same explicit `POST /api/save-points` call
+the student's own Save button already uses — confirmed by reading
+`writeDraft`, `loadDraft`, `markDraftSaved`, and `dismissDraft` in
+`src/lib/client.ts`, none of which contains a `fetch` call. No other tab,
+window, or browsing-history API is read anywhere in this pass. We
+deliberately did **not** build background monitoring; we built a local
+safety-net that watches only the page the student is typing in.
+
+**Verification:**
+- `npx tsc --noEmit` → clean, exit 0.
+- `npm run build --webpack` → `✓ Compiled successfully`, all routes
+  generated, no new warnings.
+- Confirmed via `curl` against a running instance that `/workspace`
+  redirects cleanly (307 → `/login`) for an unauthenticated request — no
+  server-side crash from the new code paths.
+- **Not runtime-verified in this pass:** an actual authenticated
+  click-through of the on-load banner and the 120-second idle offer in a
+  real browser session (no browser automation available here). Verified
+  instead by reading the effect dependencies and timing logic directly,
+  and by fixing two concrete bugs caught during that review (the
+  unsaved-changes gate and the dismiss-persistence split described above)
+  rather than assuming the first version was correct.
+
+## LANDING MOMENT SECTION — "You know this moment"
+
+The landing page jumped straight to the abstract problem statement without
+first putting the visitor inside the moment it's for. Added one new section
+to `src/app/page.tsx`, placed immediately after the hero and before "The
+shift" (confirmed by reading the file: the new `<section id="moment">`
+sits directly between the hero's closing `</section>` and the `{/* THE
+SHIFT */}` comment, so the reader meets the concrete scenario first, then
+the files-vs-thinking contrast, then the abstract problem statement).
+
+The section eyebrow reads **"You know this moment"**, followed by the
+two-paragraph second-person scenario, the bolded turn ("That's the problem
+Save Point removes...") set apart in a sage left-border callout, and the
+three-point payoff (`PayoffPoint` components: "One next step, not a wall,"
+"It catches the stray thread," "It admits when it's unsure") — deliberately
+lighter-weight than the later `FeatureTile` grid (no card border/background)
+so it reads as the scenario's punch, not a duplicate of the fuller features
+list further down the page. Closes with "Here's what that looks like."
+leading into "The shift."
+
+**Bug caught while verifying, not pre-existing:** the three `PayoffPoint`
+titles are passed as JSX string attributes, and one was first written as
+`title="It admits when it&apos;s unsure."` — inside a JS string attribute
+(as opposed to JSX text content), `&apos;` is not decoded and would have
+rendered the literal six characters `&apos;` on the page. Fixed by using a
+real apostrophe in the string. Caught by fetching the actual rendered HTML
+from a running instance and grepping for broken-entity patterns rather than
+trusting the source read alone.
+
+**Verification:**
+- `npx tsc --noEmit` → clean, exit 0.
+- `npm run build --webpack` → `✓ Compiled successfully`, no new warnings.
+- Fetched the rendered landing page from a live running instance
+  (`curl http://localhost:4477/`) and confirmed programmatically: the
+  hero's "For minds that lose the thread" text, the new section's "You know
+  this moment" text, and "The shift" heading appear in that exact order in
+  the HTML; zero literal broken-entity matches (`&apos;s`,
+  `&amp;apos;`) anywhere on the page; the "It admits when it's unsure"
+  title renders as the correct HTML entity (`it&#x27;s`), confirming the
+  fix above actually took effect in rendered output, not just in source.
+
+**Skipped, both passes:** `SAVE_POINT_CHECKLIST.md` was not recreated for
+either the SAFETY-NET PASS or the LANDING MOMENT SECTION — it was
+deliberately deleted earlier in this project's history and stays deleted;
+this file is where each pass's close-out notes live instead.

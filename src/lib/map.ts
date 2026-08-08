@@ -12,6 +12,8 @@ export function rowToSavePoint(row: Record<string, unknown>): SavePoint {
     workspaceContext:
       (row.workspace_context as SavePoint["workspaceContext"]) ?? {},
     reconstruction: (row.reconstruction as ReconstructedState | null) ?? null,
+    corrections: (row.corrections as SavePoint["corrections"]) ?? [],
+    orientingAnswer: (row.orienting_answer as string | null) ?? null,
     restored: row.restored === true,
     restoredAt: (row.restored_at as string | null) ?? null,
     createdAt: String(row.created_at),

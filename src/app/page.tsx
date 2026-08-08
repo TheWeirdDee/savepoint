@@ -111,6 +111,63 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        {/* THE MOMENT — puts the reader inside the exact scenario before any
+            abstraction, then the three-point payoff, before "The shift"
+            makes the files-vs-thinking contrast explicit. */}
+        <section id="moment" className="bg-paper-2 py-16 sm:py-24">
+          <div className="wrap">
+            <span className="inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.22em] text-sage">
+              <MarkerDot />
+              You know this moment
+            </span>
+
+            <p className="mt-6 max-w-read text-xl leading-relaxed text-ink sm:text-[22px]">
+              You&apos;re deep in an assignment. Three sources open,
+              you&apos;ve half-decided something, you know the next sentence
+              you want to write. Then your phone buzzes, or someone calls
+              your name, and you&apos;re gone.
+            </p>
+            <p className="mt-5 max-w-read text-xl leading-relaxed text-ink sm:text-[22px]">
+              Twenty minutes later you sit back down. The tabs are all still
+              there — but your head is empty. You can&apos;t remember why you
+              opened them, what you&apos;d decided, or what you were about to
+              do. So you&apos;d have to rebuild all of it from scratch. And
+              that&apos;s so tiring that, a lot of the time, you just…
+              don&apos;t. The assignment dies right there.
+            </p>
+
+            <div className="mt-8 max-w-read border-l-2 border-sage py-1 pl-5">
+              <p className="text-xl font-bold leading-snug text-ink sm:text-2xl">
+                That&apos;s the problem Save Point removes. You didn&apos;t
+                lose your files. You lost your place in your own thinking —
+                and that&apos;s the thing it hands back.
+              </p>
+            </div>
+
+            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <PayoffPoint title="One next step, not a wall.">
+                It hands you a single doable action — because when
+                you&apos;re overwhelmed, one clear move is what gets you
+                going again.
+              </PayoffPoint>
+              <PayoffPoint title="It catches the stray thread.">
+                It surfaces the side-thought you were juggling — the branch
+                an average tool (and your tired brain) would drop.
+              </PayoffPoint>
+              <PayoffPoint title="It admits when it's unsure.">
+                When it can&apos;t tell where you left off, it asks you one
+                question instead of confidently inventing a wrong answer —
+                because a wrong &ldquo;here&apos;s where you were&rdquo; is
+                worse than none.
+              </PayoffPoint>
+            </div>
+
+            <p className="mt-11 font-mono text-sm font-bold uppercase tracking-wide text-ink-soft">
+              Here&apos;s what that looks like.
+            </p>
+          </div>
+        </section>
+
         {/* THE SHIFT */}
         <section className="bg-forest py-16 text-bone sm:py-24">
           <div className="wrap">
@@ -403,6 +460,24 @@ function StepCard({
       </div>
       <h3 className="mt-3.5 text-xl font-bold text-ink">{title}</h3>
       <p className="mt-2 text-[15.5px] text-ink-soft">{children}</p>
+    </div>
+  );
+}
+
+function PayoffPoint({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <MarkerDot className="mt-1 shrink-0 text-base" />
+      <div>
+        <p className="font-bold text-ink">{title}</p>
+        <p className="mt-1 text-sm text-ink-soft">{children}</p>
+      </div>
     </div>
   );
 }

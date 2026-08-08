@@ -77,6 +77,17 @@ apologizing for how it works.
   medium is a hedge, low is a question. When there's genuinely not enough
   signal, the model says so and asks one orienting question instead of
   inventing an answer.
+- **Inspectable, correctable memory.** Important inferences include a collapsed
+  evidence receipt showing which captured signals support them. If the model
+  gets a decision wrong, the student supplies the real memory; that explicit
+  correction outranks inference in later reconstructions.
+- **Continuity without profiling.** Comparable saves can show a short “Since
+  your last save” cognitive diff. Save Point reuses only student-confirmed
+  corrections — it never silently builds a psychological profile.
+- **A complete low-context loop.** Thin captures ask one orienting question,
+  accept the answer, and reconstruct again instead of ending at an apology.
+- **Take me back.** Restoration returns the student to the captured workspace
+  or relevant page so remembering and resuming are one action.
 - **One surfaced side-thread.** If you were holding something else in mind
   besides the main thread, one quiet line names it ("Also on your mind:
   whether to cite Source C") — without turning the restore card into a list.

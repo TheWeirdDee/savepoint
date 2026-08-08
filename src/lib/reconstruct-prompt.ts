@@ -1,4 +1,4 @@
-import type { SavePointCapture } from "./types";
+import type { ReconstructionMemory, SavePointCapture } from "./types";
 
 /**
  * This prompt is the product's core AI job. It is NOT a summarizer.
@@ -27,21 +27,31 @@ LOW-CONTEXT PATH: if the snapshot is too thin to reconstruct honestly (e.g. only
 
 OPEN THREADS: mark AT MOST ONE thread "primary" — the single most important other thing the student was holding in mind besides the main thread. Everything else is "supporting" or "uncertain". This is a hard cap of one; if several things seem equally important, pick the one most likely to interrupt their focus if left unresolved.
 
+EVIDENCE RECEIPTS: every objective, stoppingPoint, mainThread, decision, and nextAction must include an "evidence" array with at most two short items. Evidence is input provenance, never hidden reasoning. It must be a real excerpt of at most 140 characters from the provided capture. Allowed sources: "note", "recent-writing", "selection", "active-page", "open-tab". Never cite previous AI output or user memory as evidence. Never fabricate or paraphrase an excerpt. If a claim is not grounded in a provided signal, return an empty evidence array and lower that field's confidence.
+
+STUDENT-CONFIRMED MEMORY: statements supplied below were explicitly confirmed or typed by the student. They outrank every model inference. Never contradict or override them.
+
+CONTINUITY: if a PREVIOUS RAW SNAPSHOT is supplied for the same document or URL, compare it with the current raw snapshot and return 2 to 4 short "whatChanged" items. Describe only changes directly supported by those snapshots: progress, changed decisions, or still-open threads. If no previous raw snapshot is supplied, or comparison would be speculative, return an empty array.
+
 TONE: warm, plain, second person, short sentences. Never reference how long the student was away. No shame, no time-guilt. This student's attention working differently is not a failing.
 
 Return EXACTLY this JSON shape:
 {
-  "objective": { "text": string, "confidence": "high"|"medium"|"low" },
-  "stoppingPoint": { "text": string, "confidence": "high"|"medium"|"low" },
-  "mainThread": { "text": string, "confidence": "high"|"medium"|"low" },
-  "decisions": [ { "text": string, "confidence": "high"|"medium"|"low", "needsConfirmation": boolean } ],
+  "objective": { "text": string, "confidence": "high"|"medium"|"low", "evidence": [{ "source": string, "excerpt": string }] },
+  "stoppingPoint": { "text": string, "confidence": "high"|"medium"|"low", "evidence": [{ "source": string, "excerpt": string }] },
+  "mainThread": { "text": string, "confidence": "high"|"medium"|"low", "evidence": [{ "source": string, "excerpt": string }] },
+  "decisions": [ { "text": string, "confidence": "high"|"medium"|"low", "needsConfirmation": boolean, "evidence": [{ "source": string, "excerpt": string }] } ],
   "openThreads": [ { "text": string, "relevance": "primary"|"supporting"|"uncertain" } ],
-  "nextAction": { "text": string, "confidence": "high"|"medium"|"low" },
+  "nextAction": { "text": string, "confidence": "high"|"medium"|"low", "evidence": [{ "source": string, "excerpt": string }] },
+  "whatChanged": [string],
   "lowContext": boolean,
   "orientingQuestion": string
 }`;
 
-export function buildReconstructUserMessage(capture: SavePointCapture): string {
+export function buildReconstructUserMessage(
+  capture: SavePointCapture,
+  memory?: ReconstructionMemory
+): string {
   const parts: string[] = [];
 
   parts.push(`SNAPSHOT SOURCE: ${capture.source}`);
@@ -80,6 +90,22 @@ export function buildReconstructUserMessage(capture: SavePointCapture): string {
       .map((t) => `- ${t.title} (${t.url})`)
       .join("\n");
     parts.push(`OTHER OPEN TABS:\n${tabs}`);
+  }
+
+  if (memory?.confirmedMemories.length) {
+    parts.push(
+      `USER-CONFIRMED MEMORY (the student stated these; never contradict or override them):\n${memory.confirmedMemories
+        .slice(0, 5)
+        .map((item) => `- ${item}`)
+        .join("\n")}`
+    );
+  }
+
+  if (memory?.previousCapture) {
+    const previous = memory.previousCapture;
+    parts.push(
+      `PREVIOUS RAW SNAPSHOT FOR THE SAME WORK:\nStudent note: ${previous.userNote ?? "(none)"}\nDocument title: ${previous.workspaceContext?.documentTitle ?? "(none)"}\nDocument content: ${truncate(previous.workspaceContext?.documentContent ?? "", 2500)}\nRecent writing: ${truncate(previous.workspaceContext?.recentEdits ?? "", 800)}\nActive page: ${previous.activeContext?.title ?? ""} ${previous.activeContext?.url ?? ""}\nSelected text: ${truncate(previous.activeContext?.selectedText ?? "", 500)}\nOpen tabs: ${previous.openTabs?.slice(0, 8).map((tab) => tab.title).join("; ") || "(none)"}`
+    );
   }
 
   parts.push(

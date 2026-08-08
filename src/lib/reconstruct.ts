@@ -10,6 +10,8 @@ import type {
   ReconstructOutcome,
   ReconstructFailureKind,
   Confidence,
+  EvidenceSource,
+  ReconstructionMemory,
 } from "./types";
 
 const TIERS: Confidence[] = ["high", "medium", "low"];
@@ -35,13 +37,14 @@ export const FAILURE_MESSAGE: Record<ReconstructFailureKind, string> = {
  * persisted as if it were a real reconstruction — see the API route.
  */
 export async function reconstruct(
-  capture: SavePointCapture
+  capture: SavePointCapture,
+  memory?: ReconstructionMemory
 ): Promise<ReconstructOutcome> {
   let text: string;
   try {
     const model = getReconstructionModel();
     const result = await model.generateContent(
-      [{ text: RECONSTRUCT_SYSTEM }, { text: buildReconstructUserMessage(capture) }],
+      [{ text: RECONSTRUCT_SYSTEM }, { text: buildReconstructUserMessage(capture, memory) }],
       { timeout: GEMINI_TIMEOUT_MS }
     );
     text = result.response.text().trim();
@@ -57,7 +60,9 @@ export async function reconstruct(
     return { ok: false, kind: "parse", message: FAILURE_MESSAGE.parse };
   }
 
-  return { ok: true, state: normalize(raw, capture) };
+  const state = normalize(raw, capture);
+  if (!memory?.previousCapture) state.whatChanged = [];
+  return { ok: true, state };
 }
 
 // Classifies a failed Gemini call using the SDK's typed error classes rather
@@ -110,9 +115,32 @@ function normalize(
   raw: Record<string, unknown>,
   capture: SavePointCapture
 ): ReconstructedState {
+  const evidenceSources: EvidenceSource[] = [
+    "note",
+    "recent-writing",
+    "selection",
+    "active-page",
+    "open-tab",
+  ];
+  const evidence = (v: unknown) =>
+    Array.isArray(v)
+      ? v.slice(0, 2).flatMap((item) => {
+          const o = (item ?? {}) as Record<string, unknown>;
+          const source = o.source as EvidenceSource;
+          const excerpt = str(o.excerpt).trim();
+          return evidenceSources.includes(source) && excerpt
+            ? [{ source, excerpt: excerpt.slice(0, 140) }]
+            : [];
+        })
+      : [];
+
   const field = (v: unknown) => {
     const o = (v ?? {}) as Record<string, unknown>;
-    return { text: str(o.text), confidence: tier(o.confidence) };
+    return {
+      text: str(o.text),
+      confidence: tier(o.confidence),
+      evidence: evidence(o.evidence),
+    };
   };
 
   const decisions = Array.isArray(raw.decisions)
@@ -122,6 +150,7 @@ function normalize(
           text: str(o.text),
           confidence: tier(o.confidence),
           needsConfirmation: o.needsConfirmation === true,
+          evidence: evidence(o.evidence),
         };
       })
     : [];
@@ -152,6 +181,9 @@ function normalize(
     decisions,
     openThreads,
     nextAction,
+    whatChanged: Array.isArray(raw.whatChanged)
+      ? raw.whatChanged.map(str).filter(Boolean).slice(0, 4)
+      : [],
     lowContext,
     orientingQuestion: lowContext
       ? str(raw.orientingQuestion) || defaultQuestion(capture)

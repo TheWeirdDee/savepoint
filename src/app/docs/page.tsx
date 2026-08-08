@@ -240,6 +240,17 @@ export default function DocsPage() {
               extension and the bookmarklet are save triggers, not a
               surveillance layer — neither does anything until you tap them.
             </p>
+            <p className="mt-4">
+              The one deliberate exception is the workspace document itself:
+              while you&apos;re typing there, a plain local draft is kept in
+              your browser&apos;s own storage — never sent to the server or
+              the AI — purely so a forgotten save never means losing what you
+              wrote. That same local activity (typing, then going quiet) is
+              also what triggers the occasional &ldquo;want me to save your
+              place?&rdquo; offer. It reads only this one document, on this
+              one tab. Not your other tabs, not your browsing history, and
+              nothing runs in the background once you close it.
+            </p>
           </DocSection>
 
           <DocSection id="faq" eyebrow="Questions" title="FAQ">

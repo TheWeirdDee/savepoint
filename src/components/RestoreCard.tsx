@@ -1,37 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import type { SavePoint, ReconstructedState, ReconstructOutcome, ReconstructFailureKind } from "@/lib/types";
+import { FormEvent, useState } from "react";
+import type {
+  ReconstructionEvidence,
+  ReconstructedField,
+  ReconstructedState,
+  ReconstructFailureKind,
+  ReconstructOutcome,
+  SavePoint,
+} from "@/lib/types";
 import { correctDecision } from "@/lib/client";
 import { ConfidenceLine } from "./ConfidenceLine";
 import { MoreContext } from "./MoreContext";
-
-// The signature experience. Strict hierarchy:
-//   1. Your next step   (the smallest doorway back — biggest thing on screen)
-//   2. Where you were   (reconstructed thread, spoken gently by tier)
-//   3. One thing I'm less sure about  (a decision that needs confirmation)
-//   4. More context     (everything else, folded away)
-//
-// A thin vertical "thread" line ties the pieces together — the thread of
-// thought the student is picking back up.
-//
-// Three distinct outcomes render three distinct cards, never merged:
-//   - a real failure (outcome.ok === false)              -> FailureCard
-//   - a genuine, successful, thin-signal result           -> LowContextCard
-//   - a genuine, successful, well-populated result         -> the main card
 
 export function RestoreCard({
   savePoint,
   outcome,
   onRetry,
+  onAddContext,
+  onTakeBack,
+  onSavePointUpdated,
   readOnly,
 }: {
   savePoint: SavePoint;
   outcome: ReconstructOutcome;
   onRetry?: () => void;
-  /** True only for the illustrative "example restore" — skips the network
-   * call a real Yes/No correction would make, since there's no real save
-   * point behind it. Never used for a genuine restore. */
+  onAddContext?: (answer: string, remember: boolean) => Promise<void>;
+  onTakeBack?: () => void;
+  onSavePointUpdated?: (savePoint: SavePoint) => void;
   readOnly?: boolean;
 }) {
   if (!outcome.ok) {
@@ -39,30 +35,30 @@ export function RestoreCard({
   }
 
   const reconstruction = outcome.state;
-
   if (reconstruction.lowContext) {
-    return <LowContextCard savePoint={savePoint} reconstruction={reconstruction} />;
+    return (
+      <LowContextCard
+        savePoint={savePoint}
+        reconstruction={reconstruction}
+        onAddContext={onAddContext}
+      />
+    );
   }
 
-  // Pick one uncertain decision to gently confirm (the first flagged one).
   const toConfirmIndex = reconstruction.decisions.findIndex((d) => d.needsConfirmation);
   const toConfirm = toConfirmIndex >= 0 ? reconstruction.decisions[toConfirmIndex] : null;
-
-  // The one other thing worth naming (Part D): at most one, and only if the
-  // model marked it primary. Everything else stays in More context.
-  const primaryThread = reconstruction.openThreads.find((t) => t.relevance === "primary") ?? null;
+  const primaryThread =
+    reconstruction.openThreads.find((thread) => thread.relevance === "primary") ?? null;
 
   return (
     <article className="animate-rise max-w-read rounded-card bg-mist shadow-card">
       <div className="relative p-8 sm:p-10">
-        {/* the thread */}
         <span
           aria-hidden
-          className="absolute left-8 top-10 bottom-10 w-px bg-line sm:left-10"
+          className="absolute bottom-10 left-8 top-10 w-px bg-line sm:left-10"
         />
 
         <div className="relative space-y-10 pl-6">
-          {/* 1 — Your next step */}
           <section>
             <p className="text-sm font-bold uppercase tracking-wide text-sage">
               Your next step
@@ -70,24 +66,71 @@ export function RestoreCard({
             <p className="mt-2 text-2xl font-bold leading-snug text-ink sm:text-3xl">
               {reconstruction.nextAction.text}
             </p>
+            <EvidenceReceipt evidence={reconstruction.nextAction.evidence} />
+            {onTakeBack && (
+              <div className="mt-5">
+                <button
+                  onClick={onTakeBack}
+                  className="rounded-lg bg-sage px-6 py-3 font-bold text-paper transition-opacity hover:opacity-90"
+                >
+                  Take me back
+                </button>
+                <p className="mt-2 text-xs text-ink-soft">
+                  Opens the active page, copies this next step, and marks this save restored.
+                </p>
+              </div>
+            )}
+            {savePoint.openTabs.length > 0 && (
+              <details className="mt-4 text-sm text-ink-soft">
+                <summary className="cursor-pointer underline decoration-line underline-offset-4">
+                  Open up to 3 related pages
+                </summary>
+                <ul className="mt-3 space-y-2">
+                  {savePoint.openTabs.slice(0, 3).map((tab) => (
+                    <li key={tab.url}>
+                      <a
+                        href={tab.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sage underline underline-offset-2"
+                      >
+                        {tab.title || tab.url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs">
+                  Open only the pages you want. Save Point never launches every tab at once.
+                </p>
+              </details>
+            )}
           </section>
 
-          {/* 2 — Where you were */}
+          {(reconstruction.whatChanged?.length ?? 0) > 0 && (
+            <details className="rounded-lg border border-line bg-paper p-5">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-wide text-ink-soft">
+                Since your last save
+              </summary>
+              <ul className="mt-3 space-y-2 text-sm text-ink">
+                {reconstruction.whatChanged.map((change) => (
+                  <li key={change} className="flex gap-2">
+                    <span aria-hidden className="text-sage">→</span>
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {(reconstruction.stoppingPoint.text ||
             reconstruction.mainThread.text ||
             primaryThread) && (
-            <section className="space-y-3">
+            <section className="space-y-4">
               <p className="text-sm font-bold uppercase tracking-wide text-ink-soft">
                 Where you were
               </p>
-              <ConfidenceLine
-                text={reconstruction.stoppingPoint.text}
-                confidence={reconstruction.stoppingPoint.confidence}
-              />
-              <ConfidenceLine
-                text={reconstruction.mainThread.text}
-                confidence={reconstruction.mainThread.confidence}
-              />
+              <FieldWithEvidence field={reconstruction.stoppingPoint} />
+              <FieldWithEvidence field={reconstruction.mainThread} />
               {primaryThread && (
                 <p className="text-sm text-ink-soft">
                   Also on your mind: {primaryThread.text}
@@ -96,12 +139,13 @@ export function RestoreCard({
             </section>
           )}
 
-          {/* 3 — One thing I'm less sure about */}
           {toConfirm && (
-            <Confirm
+            <ConfirmMemory
               savePointId={savePoint.id}
               decisionIndex={toConfirmIndex}
               decisionText={toConfirm.text}
+              evidence={toConfirm.evidence}
+              onSavePointUpdated={onSavePointUpdated}
               readOnly={readOnly}
             />
           )}
@@ -115,83 +159,255 @@ export function RestoreCard({
   );
 }
 
-function Confirm({
+function FieldWithEvidence({ field }: { field: ReconstructedField }) {
+  if (!field.text) return null;
+  return (
+    <div>
+      <ConfidenceLine text={field.text} confidence={field.confidence} />
+      <EvidenceReceipt evidence={field.evidence} />
+    </div>
+  );
+}
+
+const EVIDENCE_LABEL: Record<ReconstructionEvidence["source"], string> = {
+  note: "your note",
+  "recent-writing": "your latest writing",
+  selection: "selected text",
+  "active-page": "the active page",
+  "open-tab": "an open tab",
+};
+
+function EvidenceReceipt({ evidence }: { evidence?: ReconstructionEvidence[] }) {
+  if (!evidence?.length) return null;
+  return (
+    <details className="mt-3 text-sm">
+      <summary className="cursor-pointer text-ink-soft underline decoration-line underline-offset-4">
+        Why I think this
+      </summary>
+      <ul className="mt-3 space-y-2 border-l border-line pl-4 text-ink-soft">
+        {evidence.map((item, index) => (
+          <li key={`${item.source}-${index}`}>
+            <span className="font-bold text-ink">{EVIDENCE_LABEL[item.source]}:</span>{" "}
+            {item.excerpt}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-ink-soft">
+        These are captured signals, not hidden reasoning. You can correct the memory below.
+      </p>
+    </details>
+  );
+}
+
+function ConfirmMemory({
   savePointId,
   decisionIndex,
   decisionText,
+  evidence,
+  onSavePointUpdated,
   readOnly,
 }: {
   savePointId: string;
   decisionIndex: number;
   decisionText: string;
+  evidence: ReconstructionEvidence[];
+  onSavePointUpdated?: (savePoint: SavePoint) => void;
   readOnly?: boolean;
 }) {
-  const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
+  const [mode, setMode] = useState<"ask" | "correct" | "saved">("ask");
+  const [correction, setCorrection] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [savedMessage, setSavedMessage] = useState("");
 
-  function respond(wasCorrect: boolean) {
-    setAnswer(wasCorrect ? "yes" : "no");
-    // The example restore has no real save point behind it — reflect the
-    // tap locally only, never call the API for it.
-    if (!readOnly) {
-      correctDecision(savePointId, decisionIndex, wasCorrect);
+  async function confirm() {
+    setSaving(true);
+    setError("");
+    try {
+      if (!readOnly) {
+        const updated = await correctDecision(savePointId, decisionIndex, true);
+        onSavePointUpdated?.(updated);
+      }
+      setSavedMessage("Confirmed. I will keep this memory with this save.");
+      setMode("saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that confirmation.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitCorrection(event: FormEvent) {
+    event.preventDefault();
+    const value = correction.trim();
+    if (!value) {
+      setError("Tell me what was actually true.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      if (!readOnly) {
+        const updated = await correctDecision(
+          savePointId,
+          decisionIndex,
+          false,
+          value
+        );
+        onSavePointUpdated?.(updated);
+      }
+      setSavedMessage("Thanks — I will remember that.");
+      setMode("saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that correction.");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <section className="rounded-lg bg-paper p-5">
       <p className="text-sm font-bold uppercase tracking-wide text-ask">
-        One thing I&apos;m less sure about
+        One thing I am less sure about
       </p>
       <p className="mt-2 text-ink">{decisionText}</p>
-      {answer === null ? (
-        <div className="mt-4 flex gap-3">
+      <EvidenceReceipt evidence={evidence} />
+
+      {mode === "ask" && (
+        <div className="mt-4 flex flex-wrap gap-3">
           <button
-            onClick={() => respond(true)}
-            className="rounded-lg border border-line bg-mist px-5 py-2 font-bold text-ink hover:border-sage transition-colors"
+            onClick={confirm}
+            disabled={saving}
+            className="rounded-lg border border-line bg-mist px-5 py-2 font-bold text-ink transition-colors hover:border-sage disabled:opacity-60"
           >
-            Yes, that&apos;s right
+            {saving ? "Saving…" : "Yes, that is right"}
           </button>
           <button
-            onClick={() => respond(false)}
-            className="rounded-lg border border-line bg-mist px-5 py-2 text-ink-soft hover:border-ask transition-colors"
+            onClick={() => setMode("correct")}
+            disabled={saving}
+            className="rounded-lg border border-line bg-mist px-5 py-2 text-ink-soft transition-colors hover:border-ask disabled:opacity-60"
           >
             No, not quite
           </button>
         </div>
-      ) : (
-        <p className="mt-4 text-ink-soft">
-          {answer === "yes"
-            ? "Good — carry on from there."
-            : "No problem. Trust your own memory over mine here."}
+      )}
+
+      {mode === "correct" && (
+        <form onSubmit={submitCorrection} className="mt-4">
+          <label htmlFor={`correction-${savePointId}`} className="font-bold text-ink">
+            What were you actually thinking?
+          </label>
+          <textarea
+            id={`correction-${savePointId}`}
+            value={correction}
+            onChange={(event) => setCorrection(event.target.value)}
+            rows={2}
+            autoFocus
+            placeholder="I had not chosen a source yet."
+            className="mt-2 w-full rounded-lg border border-line bg-mist p-3 text-ink focus:border-sage focus:outline-none"
+          />
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-sage px-5 py-2 font-bold text-paper disabled:opacity-60"
+            >
+              {saving ? "Remembering…" : "Save my correction"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("ask")}
+              disabled={saving}
+              className="px-3 py-2 text-ink-soft"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {mode === "saved" && (
+        <p role="status" className="mt-4 font-bold text-sage">
+          {savedMessage}
         </p>
       )}
+      {error && <p role="alert" className="mt-3 text-sm text-ask">{error}</p>}
     </section>
   );
 }
 
-// The genuine, successful, thin-signal path — the model ran, it just didn't
-// have much to work with. Unchanged from before this pass: an honest
-// question, never a fabricated decision, never a retry button (there's
-// nothing to retry — the call succeeded).
 function LowContextCard({
   savePoint,
   reconstruction,
+  onAddContext,
 }: {
   savePoint: SavePoint;
   reconstruction: ReconstructedState;
+  onAddContext?: (answer: string, remember: boolean) => Promise<void>;
 }) {
+  const [answer, setAnswer] = useState(savePoint.orientingAnswer ?? "");
+  const [working, setWorking] = useState(false);
+  const [remember, setRemember] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = answer.trim();
+    if (!value || !onAddContext) return;
+    setWorking(true);
+    setError("");
+    try {
+      await onAddContext(value, remember);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add that context.");
+      setWorking(false);
+    }
+  }
+
   return (
-    <article className="animate-rise max-w-read rounded-card bg-mist shadow-card p-8 sm:p-10">
+    <article className="animate-rise max-w-read rounded-card bg-mist p-8 shadow-card sm:p-10">
       <p className="text-sm font-bold uppercase tracking-wide text-ask">
-        I don&apos;t have much to go on
+        I do not have much to go on
       </p>
       <p className="mt-3 text-xl font-bold leading-snug text-ink">
         {reconstruction.orientingQuestion}
       </p>
       <p className="mt-4 text-ink-soft">
-        I&apos;d rather ask than guess wrong. Tell me in a sentence and I&apos;ll
-        help you pick up the thread.
+        I would rather ask than guess wrong. One sentence is enough.
       </p>
+
+      {onAddContext && (
+        <form onSubmit={submit} className="mt-6 rounded-lg bg-paper p-5">
+          <label htmlFor={`context-${savePoint.id}`} className="font-bold text-ink">
+            I was trying to…
+          </label>
+          <textarea
+            id={`context-${savePoint.id}`}
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+            rows={3}
+            placeholder="figure out whether the evidence supports my hypothesis"
+            className="mt-2 w-full rounded-lg border border-line bg-mist p-3 text-ink focus:border-sage focus:outline-none"
+          />
+          <label className="mt-3 flex items-start gap-2 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+              className="mt-1"
+            />
+            <span>Remember my exact answer for related work. I can edit or forget it later.</span>
+          </label>
+          <button
+            type="submit"
+            disabled={working || !answer.trim()}
+            className="mt-3 rounded-lg bg-sage px-6 py-3 font-bold text-paper disabled:opacity-60"
+          >
+            {working ? "Reconstructing…" : "Use this context"}
+          </button>
+          {error && <p role="alert" className="mt-3 text-sm text-ask">{error}</p>}
+        </form>
+      )}
 
       {reconstruction.nextAction.text && (
         <div className="mt-6 rounded-lg bg-paper p-5">
@@ -209,15 +425,11 @@ function LowContextCard({
 
 const FAILURE_LABEL: Record<ReconstructFailureKind, string> = {
   quota: "The free AI plan is at its limit",
-  auth: "The AI isn't set up correctly",
-  network: "Couldn't reach the AI",
-  parse: "Got a response I couldn't read",
+  auth: "The AI is not set up correctly",
+  network: "Could not reach the AI",
+  parse: "Got a response I could not read",
 };
 
-// A genuine failure — the call itself didn't work. Deliberately distinct
-// from LowContextCard: no orienting question, no "small way back in," no
-// pretense that this is a reconstruction at all. Just what happened and a
-// way to try again, since nothing was cached and a retry genuinely re-runs.
 function FailureCard({
   kind,
   message,
@@ -228,12 +440,11 @@ function FailureCard({
   onRetry?: () => void;
 }) {
   return (
-    <article className="animate-rise max-w-read rounded-card border border-marker/30 bg-mist shadow-card p-8 sm:p-10">
+    <article className="animate-rise max-w-read rounded-card border border-marker/30 bg-mist p-8 shadow-card sm:p-10">
       <p className="text-sm font-bold uppercase tracking-wide text-marker">
         {FAILURE_LABEL[kind]}
       </p>
       <p className="mt-3 text-xl font-bold leading-snug text-ink">{message}</p>
-
       {onRetry && (
         <button
           onClick={onRetry}

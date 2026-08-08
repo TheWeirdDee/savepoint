@@ -133,16 +133,54 @@ async function handlePatch(req: NextRequest): Promise<NextResponse> {
     const reconstruction = row.reconstruction as ReconstructedState;
     const decision = reconstruction.decisions[correction.decisionIndex];
     if (decision) {
+      if (!correction.wasCorrect && !correction.correctedText?.trim()) {
+        return NextResponse.json(
+          { error: "Tell me what was actually true so I can remember it." },
+          { status: 400 }
+        );
+      }
+      const originalText = decision.text;
+      let memoryRowId: string | null = null;
       decision.needsConfirmation = false;
       decision.confidence = correction.wasCorrect ? "high" : "low";
       if (!correction.wasCorrect && correction.correctedText?.trim()) {
         decision.text = correction.correctedText.trim();
+        decision.evidence = [];
+        update.corrections = [
+          ...((row.corrections as unknown[]) ?? []),
+          {
+            originalText,
+            correctedText: correction.correctedText.trim(),
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        const memoryText = `The student corrected "${originalText}" to "${correction.correctedText.trim()}".`;
+        const { data: memoryRow, error: memoryError } = await supabase
+          .from("user_memory")
+          .insert({
+            user_id: userId,
+            text: memoryText.slice(0, 500),
+            origin_save_point_id: savePointId,
+          })
+          .select("id")
+          .single();
+        if (memoryError || !memoryRow) {
+          return NextResponse.json(
+            { error: "Could not save that correction as remembered context." },
+            { status: 500 }
+          );
+        }
+        memoryRowId = String(memoryRow.id);
       }
       update.reconstruction = reconstruction;
+
+      if (memoryRowId) {
+        update.memory_row_id_for_rollback = memoryRowId;
+      }
     }
   }
 
-  if (markRestored || correction) {
+  if (markRestored) {
     update.restored = true;
     update.restored_at = new Date().toISOString();
   }
@@ -150,6 +188,9 @@ async function handlePatch(req: NextRequest): Promise<NextResponse> {
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ savePoint: rowToSavePoint(row) });
   }
+
+  const memoryRowIdForRollback = update.memory_row_id_for_rollback as string | undefined;
+  delete update.memory_row_id_for_rollback;
 
   const { data: updated, error: updateError } = await supabase
     .from("save_points")
@@ -160,6 +201,9 @@ async function handlePatch(req: NextRequest): Promise<NextResponse> {
     .single();
 
   if (updateError || !updated) {
+    if (memoryRowIdForRollback) {
+      await supabase.from("user_memory").delete().eq("id", memoryRowIdForRollback);
+    }
     return NextResponse.json({ error: "Could not save your correction." }, { status: 500 });
   }
 
