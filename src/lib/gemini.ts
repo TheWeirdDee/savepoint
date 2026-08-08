@@ -1,34 +1,32 @@
-import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// SERVER ONLY. Holds the Gemini API key. Lazily initialized so importing a
-// route module during `next build` never throws when the key is absent — it
-// only errors if actually called at runtime without configuration.
-
+// Server-only, lazy client. Importing this module during a build never requires
+// a key; a missing key matters only when Gemini is actually selected.
 let client: GoogleGenerativeAI | null = null;
+
+export const GEMINI_MODEL =
+  process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
 export function getGemini(): GoogleGenerativeAI {
   if (client) return client;
   const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GOOGLE_API_KEY");
-  }
+  if (!apiKey) throw new Error("Missing GOOGLE_API_KEY");
   client = new GoogleGenerativeAI(apiKey);
   return client;
 }
 
-// Free tier, fast, cheap enough to run per-restore. Override via env if needed.
-// "gemini-2.0-flash" is a dated model string and can be retired off the free
-// tier over time (confirmed via curl: 429 limit:0 on an otherwise-valid key,
-// while "gemini-1.5-flash" 404s entirely). "gemini-flash-latest" is an alias
-// Google keeps pointed at their current free-tier flash model, so it doesn't
-// go stale the way a pinned version does.
-export const MODEL = process.env.GEMINI_MODEL ?? "gemini-flash-latest";
-
-export function getReconstructionModel(): GenerativeModel {
-  return getGemini().getGenerativeModel({
-    model: MODEL,
-    generationConfig: {
-      responseMimeType: "application/json",
-    },
+export async function callGemini(
+  system: string,
+  user: string,
+  { timeoutMs }: { timeoutMs: number }
+): Promise<string> {
+  const model = getGemini().getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: { responseMimeType: "application/json" },
+    systemInstruction: system,
   });
+  const result = await model.generateContent(user, { timeout: timeoutMs });
+  const text = result.response.text().trim();
+  if (!text) throw new Error("Gemini returned an empty response");
+  return text;
 }

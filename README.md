@@ -103,7 +103,8 @@ apologizing for how it works.
 
 ## How the AI works
 
-Not a chatbot, not a summarizer. The model (Google Gemini) fuses
+Not a chatbot, not a summarizer. The reconstruction provider (Groq first,
+with Gemini as an automatic fallback) fuses
 **incomplete** signals — an optional note, recent writing, selected text,
 the active page, other open tabs — into the cognitive state most useful for
 *re-entry*, and tags every inference with a confidence tier that controls
@@ -126,7 +127,7 @@ See [Resilience](#resilience--when-the-ai-itself-fails) below.
 | Bundler | **webpack** (`--webpack` on `dev`/`build`) | explicitly not Turbopack |
 | Styling | Tailwind CSS v3 | utility-first, easy to enforce a strict design-token palette |
 | Database | Supabase (Postgres) | free tier, service-role access only from server routes |
-| AI | Google Gemini (`gemini-flash-latest`), free tier | zero cost, generous free quota, JSON-mode output |
+| AI | Groq (`llama-3.3-70b-versatile`) + Gemini fallback (`gemini-3.5-flash-lite`) | fast primary inference, independent fallback, JSON-mode output |
 | Auth | Custom — bcrypt + JWT, httpOnly cookie + Bearer | simple username/password, no OAuth dependency |
 | Password reset email | Resend REST API (no SDK), free tier | one endpoint, no extra dependency, generous free quota |
 | Extension | Manifest V3, vanilla HTML/CSS/JS | no build step, small surface area |
@@ -223,7 +224,8 @@ save-point/
 
 ## Running it locally
 
-**Prerequisites:** Node 18+, a free Supabase project, a free Google Gemini API key.
+**Prerequisites:** Node 18+, a free Supabase project, and a Groq or Gemini API
+key. Configure both for automatic failover.
 
 1. **Install**
    ```bash
@@ -237,8 +239,10 @@ save-point/
    ```
    NEXT_PUBLIC_SUPABASE_URL=...
    SUPABASE_SERVICE_ROLE_KEY=...      # server-only; never shipped to the client
-   GOOGLE_API_KEY=...                 # free key from aistudio.google.com
-   GEMINI_MODEL=gemini-flash-latest   # optional override, this is the default
+   GROQ_API_KEY=...                   # primary; omit for Gemini-only operation
+   GROQ_MODEL=llama-3.3-70b-versatile
+   GOOGLE_API_KEY=...                 # fallback; omit for Groq-only operation
+   GEMINI_MODEL=gemini-3.5-flash-lite
    SESSION_SECRET=...                 # any long random string, e.g. `openssl rand -base64 48`
    RESEND_API_KEY=...                 # free key from resend.com/api-keys — powers "forgot password"
    RESEND_FROM_EMAIL=                 # optional; leave empty to use Resend's sandbox sender
@@ -274,8 +278,10 @@ runs exactly this repo, zero-config.
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | your Supabase project URL |
    | `SUPABASE_SERVICE_ROLE_KEY` | your Supabase **service_role** secret |
-   | `GOOGLE_API_KEY` | your free Gemini API key |
-   | `GEMINI_MODEL` | `gemini-flash-latest` |
+   | `GROQ_API_KEY` | your Groq API key (primary) |
+   | `GROQ_MODEL` | `llama-3.3-70b-versatile` |
+   | `GOOGLE_API_KEY` | your Gemini API key (automatic fallback) |
+   | `GEMINI_MODEL` | `gemini-3.5-flash-lite` |
    | `SESSION_SECRET` | a long random string (reuse your local one, or generate a new one — either is fine, it just needs to stay stable so existing sessions don't get invalidated on redeploy) |
    | `RESEND_API_KEY` | your free Resend key — without this, "forgot password" requests will 500 |
    | `RESEND_FROM_EMAIL` | optional — leave unset to use Resend's shared sandbox sender |
@@ -284,7 +290,7 @@ runs exactly this repo, zero-config.
    for a real deploy.
 
 3. Deploy. The `/api/*` routes run as Vercel serverless functions and are
-   the only place the service-role and Gemini keys ever live.
+   the only place the service-role and AI-provider keys ever live.
 4. **Point the extension at production** — in the extension's Options page,
    set **Workspace address** to your deployed URL (e.g.
    `https://savepoint-seven.vercel.app`) instead of the `http://localhost:3000`

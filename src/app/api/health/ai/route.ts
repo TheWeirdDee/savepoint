@@ -1,29 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getReconstructionModel } from "@/lib/gemini";
-import { classifyError, FAILURE_MESSAGE } from "@/lib/reconstruct";
+import { checkReconstructionProviders } from "@/lib/llm";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/health/ai — a minimal reachability check for the Gemini backend.
-// This costs a real (tiny) token call, so it is NEVER invoked automatically
-// anywhere in this app — only a human hitting ?check=1 explicitly triggers
-// the live call. Without that flag it just explains itself and does nothing.
+// Deliberately opt-in: each configured provider receives one tiny live call.
 export async function GET(req: NextRequest) {
-  const check = req.nextUrl.searchParams.get("check");
-  if (check !== "1") {
+  if (req.nextUrl.searchParams.get("check") !== "1") {
     return NextResponse.json({
       ok: null,
-      message: "Pass ?check=1 to run a live reachability check (costs one small AI call).",
+      message:
+        "Pass ?check=1 to test configured AI providers (costs one small call per provider).",
     });
   }
 
-  try {
-    const model = getReconstructionModel();
-    await model.generateContent("ping", { timeout: 10_000 });
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    const { kind } = classifyError(err);
-    return NextResponse.json({ ok: false, kind, message: FAILURE_MESSAGE[kind] });
+  const providers = await checkReconstructionProviders();
+  if (providers.groq.reachable) {
+    return NextResponse.json({
+      ok: true,
+      primary: "groq",
+      fallbackAvailable: providers.gemini.reachable,
+      providers,
+    });
   }
+  if (providers.gemini.reachable) {
+    return NextResponse.json({
+      ok: true,
+      primary: "gemini",
+      note: "Groq unavailable; Gemini fallback is active.",
+      providers,
+    });
+  }
+
+  const kind = providers.groq.kind ?? providers.gemini.kind ?? "auth";
+  return NextResponse.json(
+    {
+      ok: false,
+      kind,
+      message: "No configured reconstruction provider is reachable.",
+      providers,
+    },
+    { status: 503 }
+  );
 }

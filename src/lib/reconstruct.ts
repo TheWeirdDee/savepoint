@@ -1,8 +1,8 @@
+import { ReconstructionModelError, runReconstructionModel } from "./llm";
 import {
   GoogleGenerativeAIAbortError,
   GoogleGenerativeAIFetchError,
 } from "@google/generative-ai";
-import { getReconstructionModel } from "./gemini";
 import { RECONSTRUCT_SYSTEM, buildReconstructUserMessage } from "./reconstruct-prompt";
 import type {
   SavePointCapture,
@@ -20,12 +20,11 @@ const tier = (v: unknown): Confidence =>
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 // The student should never stare at a spinner for a doomed request.
-const GEMINI_TIMEOUT_MS = 20_000;
 
 export const FAILURE_MESSAGE: Record<ReconstructFailureKind, string> = {
   quota:
     "The free AI plan has hit its limit for now. Your save is safe — try restoring again later.",
-  auth: "The AI key isn't set up correctly. (Check GOOGLE_API_KEY.)",
+  auth: "The AI provider keys are not set up correctly. Check GROQ_API_KEY or GOOGLE_API_KEY.",
   network: "Couldn't reach the AI just now. Your save is safe — try again in a moment.",
   parse: "The AI replied in a form I couldn't read. Try again.",
 };
@@ -42,14 +41,14 @@ export async function reconstruct(
 ): Promise<ReconstructOutcome> {
   let text: string;
   try {
-    const model = getReconstructionModel();
-    const result = await model.generateContent(
-      [{ text: RECONSTRUCT_SYSTEM }, { text: buildReconstructUserMessage(capture, memory) }],
-      { timeout: GEMINI_TIMEOUT_MS }
+    const result = await runReconstructionModel(
+      RECONSTRUCT_SYSTEM,
+      buildReconstructUserMessage(capture, memory)
     );
-    text = result.response.text().trim();
+    text = result.text.trim();
   } catch (err) {
-    const { kind } = classifyError(err);
+    const kind =
+      err instanceof ReconstructionModelError ? err.kind : "network";
     return { ok: false, kind, message: FAILURE_MESSAGE[kind] };
   }
 
