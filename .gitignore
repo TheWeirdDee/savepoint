@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local-only presenter notes, not for the public repo
+/DEMO_SCRIPT.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
