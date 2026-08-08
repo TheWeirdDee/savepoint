@@ -323,7 +323,7 @@ runs exactly this repo, zero-config.
    the only place the service-role and AI-provider keys ever live.
 4. **Point the extension at production** — in the extension's Options page,
    set **Workspace address** to your deployed URL (e.g.
-   `https://savepoint-seven.vercel.app`) instead of local `http://localhost:4477`
+   `https://savepoint-seven.vercel.app`) instead of the `http://localhost:3000`
    default.
 
 Because Next.js inlines `NEXT_PUBLIC_*` variables at build time, changing
@@ -406,18 +406,14 @@ V3 extensions require desktop Chrome).
 1. Click the Save Point icon. It opens straight to a small login form.
 2. Enter the **same username and password** you used to sign up in the
    workspace.
-3. The popup shows which username owns each save. The extension defaults to
-   `https://savepoint-seven.vercel.app`; local development is
-   `http://localhost:4477`. Switch them in the extension's **Options** page.
+3. That's it — no codes, no device ids to copy. The extension's **Workspace
+   address** defaults to `http://localhost:3000`; change it in the
+   extension's **Options** page to point at a deployed instance instead.
 
 Now the popup's **Save where my brain is** captures the active tab, any
 selected text, a short page snippet, and your other open tab titles — plus
-an optional note — into the username displayed in the popup. Other open tabs
-are excluded by default and require an explicit checkbox for each save; they
-are retained as optional return links, not AI evidence. **Open workspace**
-opens that exact point under `/workspace`. The website and extension keep
-separate sessions, so their displayed usernames must match. If the extension
-session expires, the popup drops back to the login form automatically.
+an optional note — into the same account as your workspace saves. If the
+session ever expires, the popup drops back to the login form automatically.
 
 **Being honest about this method's real limits:** it isn't on the Chrome Web
 Store, which means (1) many school-managed Chromebooks block Developer Mode
@@ -586,7 +582,7 @@ from that experience, not just the pitch:
   motion) are real, tested toggles, not a checklist item.
 
 **Tested with a neurodivergent user.** We tested the restore flow directly
-with a neurodivergent user — Eniola, a dyslexic [RELATIONSHIP — e.g.
+with a neurodivergent user — Eniola, a dyslexic [RELATIONSHIP —
 classmate], who walked through a real save-and-interrupt cycle without
 being told how the UI worked first. `[ONE DIRECT QUOTE — her exact words —
 TO BE FILLED IN AFTER THE SESSION]`. In response, we `[ONE CONCRETE CHANGE

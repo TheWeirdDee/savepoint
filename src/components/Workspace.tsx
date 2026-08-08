@@ -10,6 +10,7 @@ import {
   listSavePoints,
   restoreSavePoint,
   loadDraft,
+  clearDraft,
   writeDraft,
   markDraftSaved,
   dismissDraft,
@@ -106,14 +107,15 @@ export function Workspace({ user }: { user: AuthUser }) {
   useEffect(() => {
     const draft = loadDraft(user.id);
     if (draft) {
-      setTitle(draft.title);
-      setContent(draft.content);
       if (draft.savedIntoPointId) {
-        // This exact content is already captured in a real save point —
-        // nothing unsaved here, so seed the baseline to match.
-        lastSavedRef.current = { title: draft.title, content: draft.content };
-      } else if (!draft.dismissedAt) {
-        setForgottenDraft(draft);
+        // History owns this already-saved draft; a new workspace stays blank.
+        clearDraft(user.id);
+      } else {
+        setTitle(draft.title);
+        setContent(draft.content);
+        if (!draft.dismissedAt) {
+          setForgottenDraft(draft);
+        }
       }
     }
     hydratedRef.current = true;
@@ -344,6 +346,27 @@ export function Workspace({ user }: { user: AuthUser }) {
     setShowExample(false);
   }, []);
 
+  const startNewSavePoint = useCallback(() => {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm("Start a blank save point? Your unsaved writing will be cleared.")
+    ) {
+      return;
+    }
+    clearDraft(user.id);
+    setTitle("");
+    setContent("");
+    lastSavedRef.current = { title: "", content: "" };
+    setForgottenDraft(null);
+    setIdleOffer(false);
+    setPendingCapture(null);
+    setOffer(null);
+    setOfferDismissed(true);
+    setHandoffError("");
+    setShowExample(false);
+    setView({ mode: "writing" });
+  }, [hasUnsavedChanges, user.id]);
+
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
     await logout();
@@ -376,7 +399,7 @@ export function Workspace({ user }: { user: AuthUser }) {
         {/* LEFT RAIL */}
         <aside className="flex flex-col gap-6 lg:sticky lg:top-8">
           <button
-            onClick={backToWriting}
+            onClick={startNewSavePoint}
             className="w-full rounded-lg border border-line bg-mist px-4 py-3 text-left font-bold text-ink transition-colors hover:border-sage"
           >
             ＋ New save point

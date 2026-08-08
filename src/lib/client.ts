@@ -84,6 +84,11 @@ export function loadDraft(userId: string): WorkspaceDraft | null {
   }
 }
 
+export function clearDraft(userId: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(draftKey(userId));
+}
+
 // Called on every debounced edit, and again on beforeunload — localStorage
 // writes are synchronous, so it's safe to call directly from an unload
 // handler with no flush delay. A fresh edit always clears any prior
