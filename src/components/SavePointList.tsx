@@ -13,13 +13,38 @@ const VISIBLE_COUNT = 5;
 export function SavePointList({
   savePoints,
   onOpen,
+  onDelete,
   onSeeExample,
 }: {
   savePoints: SavePoint[];
   onOpen: (sp: SavePoint) => void;
+  onDelete: (sp: SavePoint) => Promise<void>;
   onSeeExample?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDelete(sp: SavePoint) {
+    if (
+      !window.confirm(
+        `Delete “${savePointLabel(sp)}”? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(sp.id);
+    setDeleteError("");
+    try {
+      await onDelete(sp);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Could not delete this save point."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (savePoints.length === 0) {
     return (
@@ -55,10 +80,13 @@ export function SavePointList({
         }`}
       >
         {visible.map((sp) => (
-          <li key={sp.id}>
+          <li
+            key={sp.id}
+            className="flex overflow-hidden rounded-lg border border-line bg-paper transition-colors hover:border-sage"
+          >
             <button
               onClick={() => onOpen(sp)}
-              className="flex w-full flex-col gap-1 rounded-lg border border-line bg-paper px-3.5 py-3 text-left transition-colors hover:border-sage"
+              className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-left"
             >
               <span className="line-clamp-2 text-sm text-ink">
                 {savePointLabel(sp)}
@@ -67,9 +95,24 @@ export function SavePointList({
                 {sp.restored ? "revisit" : "restore →"}
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(sp)}
+              disabled={deletingId === sp.id}
+              aria-label={`Delete ${savePointLabel(sp)}`}
+              className="shrink-0 border-l border-line px-3 text-xs font-bold text-ink-soft transition-colors hover:bg-mist hover:text-ink disabled:opacity-50"
+            >
+              {deletingId === sp.id ? "Deleting…" : "Delete"}
+            </button>
           </li>
         ))}
       </ul>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-xs text-ask">
+          {deleteError}
+        </p>
+      )}
 
       {hiddenCount > 0 && (
         <button

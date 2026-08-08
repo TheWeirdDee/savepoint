@@ -20,13 +20,14 @@
           New here? <a href="#" id="open-workspace-signup">Create an account</a>
         </p>
         <p class="muted center" style="margin-top: 6px;">
-          <a href="#" id="open-options-link">Workspace not localhost:3000? Change it</a>
+          <a href="#" id="open-options-link">Change workspace address</a>
         </p>
       </section>
 
       <!-- Ready -->
       <section id="ready" class="hidden">
         <p class="title">Save where my brain is</p>
+        <p class="muted" id="account-label"></p>
         <label class="muted" for="note">Add one thought (optional)</label>
         <input id="note" placeholder="e.g. checking which source is more reliable" />
         <button id="save" class="primary">Save my place</button>
@@ -43,6 +44,7 @@
       <!-- Saved -->
       <section id="saved" class="hidden">
         <p class="title">Save point created</p>
+        <p class="muted" id="saved-account-label"></p>
         <p class="muted">Open the Save Point workspace to pick up your thread.</p>
         <button id="open-workspace" class="ghost">Open workspace</button>
       </section>

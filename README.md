@@ -143,11 +143,20 @@ See [Resilience](#resilience--when-the-ai-itself-fails) below.
                                           │  GET  /api/save-points   (list + latest unrestored)
                                           │  PATCH /api/save-points  (correction / mark-restored)
                                           │  POST /api/reconstruct   (reconstruct one point)
+                                          │  GET/POST/PATCH/DELETE /api/memory (remembered facts)
                                           ▼
-                                     Supabase (users, save_points)
+                          Supabase (users, save_points, user_memory)
                                           │
                                           ▼
-                            Gemini Flash reconstruction (server)
+                     lib/llm.ts — provider orchestrator (server)
+                     ┌────────────────────┴────────────────────┐
+                     ▼                                         ▼
+              Groq (primary)                       Gemini (automatic fallback)
+        llama-3.3-70b-versatile                       gemini-3.5-flash-lite
+                     └────────────────────┬────────────────────┘
+                                          ▼
+                     one reconstruction step, fed confirmed
+                     memory + a comparable prior save
                                           │
                      ┌────────────────────┼────────────────────┐
                      ▼                    ▼                    ▼
@@ -156,6 +165,11 @@ See [Resilience](#resilience--when-the-ai-itself-fails) below.
                                           ▼
         Restore screen: next action first → where you were → gentle Q → "More context"
 ```
+
+Groq is tried first; Gemini is only called if Groq is unconfigured or its call
+fails. Both failure paths are classified into the same four-kind outcome (see
+[Resilience](#resilience--when-the-ai-itself-fails)), so the rest of the app
+never needs to know which provider actually answered.
 
 The workspace and the extension send the **same** capture payload shape
 (`SavePointCapture` in `src/lib/types.ts`) to the **same** API, so the
@@ -188,8 +202,12 @@ save-point/
           forgot-password/route.ts generate + email a one-hour reset token (never confirms if the email exists)
           reset-password/route.ts  verify the token, set a new password, sign in immediately
         save-points/route.ts   POST create, GET list, PATCH correct/mark-restored (session-scoped)
-        reconstruct/route.ts   POST — run Gemini, classify failures, cache on success, mark restored
-        health/ai/route.ts     opt-in (?check=1) live Gemini reachability check, never auto-called
+        reconstruct/route.ts   POST — run Groq (Gemini fallback) via lib/llm.ts, classify failures,
+                                cache on success, mark restored; injects confirmed memory and a
+                                comparable prior save for the "since your last save" diff
+        memory/route.ts        GET list, POST create, PATCH edit, DELETE forget — session-scoped
+                                remembered facts (see "Inspectable, correctable memory" above)
+        health/ai/route.ts     opt-in (?check=1) live Groq + Gemini reachability check, never auto-called
     components/
       Workspace.tsx            the app shell: write, save, restore, log out, and the mobile-bookmarklet landing flow
       LoginForm.tsx / SignupForm.tsx / ForgotPasswordForm.tsx / ResetPasswordForm.tsx   the account forms
@@ -197,27 +215,38 @@ save-point/
       SavePointButton.tsx      one-tap deliberate save, optional typed/dictated note
       PendingCaptureCard.tsx   "Save this page?" — where the mobile bookmarklet hands off its capture
       RestoreCard.tsx          next step first → where-you-were → confirm → More context
-                                (branches into a genuine low-context card or a distinct failure card)
+                                (branches into a genuine low-context card or a distinct failure card);
+                                also renders evidence receipts, "Take me back", and "Since your last save"
       RestoreOffer.tsx         calm "Welcome back" pull (no time-guilt)
       ConfidenceLine.tsx       gentle tier marker (sage/marker/ask), never an alarm flag
       MoreContext.tsx          progressive disclosure for everything secondary
+      MemoryPanel.tsx          collapsible "What Save Point remembers" list — edit/forget any stored memory
       AccessibilityBar.tsx     text size, spacing, dyslexia font, reduced motion (floating + inline)
       SavePointList.tsx        past save points, capped + expandable, no badges/dots
       FaqAccordion.tsx         shared accordion (landing page + /docs)
       BookmarkletSection.tsx   the mobile capture fallback — install steps + copyable bookmarklet code
     lib/
-      types.ts                 the shared schema — capture, reconstruction, outcome, auth types
+      types.ts                 the shared schema — capture, reconstruction, outcome, memory, auth types
       auth.ts                  password hashing, session JWTs, cookie + Bearer resolution, reset tokens
       email.ts                 server-only lazy Resend client — password-reset email only
       cors.ts                  CORS headers for the two routes the extension calls cross-origin
-      reconstruct-prompt.ts    the core AI job: sparse-signal fusion, no fabrication, low-context path
-      reconstruct.ts           calls Gemini, classifies failures by type, never caches a failure
+      reconstruct-prompt.ts    the core AI job: sparse-signal fusion, no fabrication, low-context path,
+                                confirmed-memory injection, prior-save comparison for continuity
+      reconstruct.ts           runs the provider(s) via lib/llm.ts, normalizes + validates the JSON
+                                response, never caches a failure
+      llm.ts                   provider orchestrator — tries Groq, falls back to Gemini, unifies both
+                                providers' failures into the same four-kind outcome
+      providers/groq.ts        server-only lazy Groq client + MODEL constant (primary provider)
       demoFixtures.ts          canned reconstruction used only in demo mode (see below)
-      gemini.ts                server-only lazy Gemini client + MODEL constant
+      gemini.ts                server-only lazy Gemini client + MODEL constant (fallback provider)
       supabase.ts              server-only lazy service-role client
       client.ts                draft persistence + API client (browser)
       map.ts                   DB row -> API shape
-  supabase/schema.sql          users (+ reset tokens) + save_points tables, locked-down RLS
+  supabase/
+    schema.sql                 users (+ reset tokens), save_points (+ corrections, orienting_answer),
+                                and user_memory tables, locked-down RLS
+    migrations/
+      20260808_memory_loop.sql the additive migration for an existing database — see "Database schema"
   extension/                   Manifest V3 sensor (popup + options) — desktop Chrome only, login-based
   .env.example
 ```
@@ -253,8 +282,9 @@ key. Configure both for automatic failover.
    ```bash
    npm run dev
    ```
-   Open http://localhost:3000 for the landing page. Click **Sign up**, create
-   an account, and you'll land in `/workspace` automatically.
+   Open http://localhost:4477 for the landing page (the `dev`/`start` scripts
+   pin a fixed port — see `package.json`). Click **Sign up**, create an
+   account, and you'll land in `/workspace` automatically.
 
 > **Webpack, not Turbopack.** Both `dev` and `build` scripts pass `--webpack`
 > on purpose. Do not remove that flag.
@@ -315,15 +345,29 @@ save_points (
   source ('workspace' | 'extension'),
   user_note, active_context (jsonb), open_tabs (jsonb), workspace_context (jsonb),
   reconstruction (jsonb, nullable),
+  corrections (jsonb, default '[]'),      -- raw {originalText, correctedText, createdAt} log per point
+  orienting_answer (text, nullable),      -- the student's answer to the low-context follow-up question
   restored (bool), restored_at,
+  created_at
+)
+user_memory (
+  id, user_id -> users.id,
+  text,                                   -- the student's own words, or an explicitly-confirmed correction
+  origin_save_point_id -> save_points.id [nullable, set null on delete],
   created_at
 )
 ```
 
-Row-level security is enabled on both tables with **no public policies** —
-the anon/public role can't read or write anything directly. Every access
-goes through a server route holding the service-role key, so RLS stays
-locked down without needing per-row policies.
+Row-level security is enabled on all three tables with **no public
+policies** — the anon/public role can't read or write anything directly.
+Every access goes through a server route holding the service-role key, so
+RLS stays locked down without needing per-row policies.
+
+**Existing database?** `supabase/schema.sql` is the full, from-scratch
+version. If you already have the `users`/`save_points` tables from before
+the memory pass, run the additive migration instead —
+`supabase/migrations/20260808_memory_loop.sql` — which only adds the new
+columns and the `user_memory` table without touching existing data.
 
 ## Accounts
 
@@ -362,14 +406,16 @@ V3 extensions require desktop Chrome).
 1. Click the Save Point icon. It opens straight to a small login form.
 2. Enter the **same username and password** you used to sign up in the
    workspace.
-3. That's it — no codes, no device ids to copy. The extension's **Workspace
-   address** defaults to `http://localhost:3000`; change it in the
-   extension's **Options** page to point at a deployed instance instead.
+3. The popup shows which username owns each save. The extension defaults to
+   `https://savepoint-seven.vercel.app`; local development is
+   `http://localhost:4477`. Switch them in the extension's **Options** page.
 
 Now the popup's **Save where my brain is** captures the active tab, any
 selected text, a short page snippet, and your other open tab titles — plus
-an optional note — into the same account as your workspace saves. If the
-session ever expires, the popup drops back to the login form automatically.
+an optional note — into the username displayed in the popup. **Open workspace**
+opens that exact point under `/workspace`. The website and extension keep
+separate sessions, so their displayed usernames must match. If the extension
+session expires, the popup drops back to the login form automatically.
 
 **Being honest about this method's real limits:** it isn't on the Chrome Web
 Store, which means (1) many school-managed Chromebooks block Developer Mode
@@ -416,8 +462,12 @@ All `/api/*` routes are Node runtime, `force-dynamic` (never prerendered).
 | `/api/save-points` | POST | cookie/Bearer | create a save point; CORS-enabled for the extension |
 | `/api/save-points` | GET | cookie | list this user's save points + the latest unrestored one |
 | `/api/save-points` | PATCH | cookie | record a decision correction and/or mark restored |
-| `/api/reconstruct` | POST | cookie | run (or replay cached) reconstruction; returns `{ok:true,state}` or `{ok:false,kind,message}` |
-| `/api/health/ai` | GET | — | `?check=1` runs a live, token-costing Gemini reachability check; without it, a no-op |
+| `/api/reconstruct` | POST | cookie | run (or replay cached) reconstruction via Groq, falling back to Gemini; body accepts an optional `additionalContext` (a low-context follow-up answer) and `rememberContext` (opt-in, saves that answer as reusable memory); returns `{ok:true,state}` or `{ok:false,kind,message}` |
+| `/api/memory` | GET | cookie | list this user's remembered facts, newest first |
+| `/api/memory` | POST | cookie | create a remembered fact (`{ text, originSavePointId? }`) |
+| `/api/memory` | PATCH | cookie | edit a remembered fact (`{ id, text }`) |
+| `/api/memory` | DELETE | cookie | forget a remembered fact (`?id=`) |
+| `/api/health/ai` | GET | — | `?check=1` runs a live, token-costing reachability check against every configured provider (Groq and/or Gemini); without it, a no-op |
 
 ## Accessibility
 
@@ -466,18 +516,28 @@ treats AI failure as a first-class product concern, not an afterthought:
 - **Four distinct, honestly-labeled failure kinds** — `quota`, `auth`,
   `network`, `parse` — each with specific, actionable copy (e.g. "The free
   AI plan has hit its limit for now. Your save is safe — try restoring again
-  later."), classified using the Gemini SDK's own typed error classes, not
-  fragile string-matching.
+  later."). Classification spans both providers: Gemini failures are read
+  from the Gemini SDK's own typed error classes
+  (`GoogleGenerativeAIFetchError`/`GoogleGenerativeAIAbortError`, which carry
+  a real HTTP status); Groq failures are read from the SDK error's status
+  code and message text. Either path lands in the same four-kind outcome, so
+  the rest of the app never has to know which provider actually failed.
+- **Automatic fallback, not a second failure mode to handle.** If Groq is
+  unconfigured or its call fails, Gemini is tried next, transparently — the
+  caller only sees one outcome, win or lose. Both providers being down is
+  itself just another instance of the same four-kind failure, not a fifth
+  special case.
 - **A failed reconstruction is never cached or marked restored.** The next
   attempt always starts fresh instead of replaying a stuck fallback forever.
 - **A distinct failure card**, visually and textually different from a
   genuine "the model ran but signal was thin" card — no fabricated next
   step, just what happened and a **Try again** button that genuinely re-runs
   (nothing was cached).
-- **A 20-second timeout** on every Gemini call so a doomed request resolves
-  instead of hanging.
+- **An independent timeout on every provider call** (Groq 15s, Gemini 20s)
+  so a doomed request resolves instead of hanging or stalling the fallback.
 - **`GET /api/health/ai?check=1`** — a manual, opt-in reachability check
-  (never called automatically anywhere in the app).
+  against every configured provider (never called automatically anywhere in
+  the app).
 - **Demo mode** (`NEXT_PUBLIC_DEMO_MODE=1` or `?demo=1` on `/workspace`) —
   restore uses a bundled, clearly-labeled canned example instead of calling
   Gemini, so the save→restore experience can still be shown if the live key
@@ -507,36 +567,28 @@ on demo day, set `?demo=1` on the workspace URL as a safety net.
 
 ## Neurodivergent-user evidence
 
-Save Point is built by two neurodivergent students, Divine and Eniola.
-Between us, we live with ADHD and dyslexia. We aren't outside testers who
-tried the app once before submission — we're the users it was built for, and
-our own daily experience is what shaped the actual decisions in this repo,
-not just the pitch:
+Save Point is built by one neurodivergent (ADHD) student, from direct lived
+experience of the re-entry problem — the design decisions in this repo come
+from that experience, not just the pitch:
 
-- **The core problem is something one of us lives with.** Getting pulled
-  away from schoolwork and coming back to find the files still open but the
-  *thinking* behind them gone — why a paragraph mattered, which idea had
-  already been ruled out, what came next. That's the ADHD experience that
-  started this project (see [PRD.md](PRD.md), section 2).
-- **No shame, ever.** Save Point never says "you were gone 2 hours" and has
-  no streaks. That rule exists because being reminded how long you were away
-  doesn't help you start again — it just adds guilt on top of the work
-  itself. See the framing rule in [PRD.md](PRD.md), section 3.
-- **Saving can never require filling out a form.** The note on a save point
-  is optional and skippable, because the moment you're interrupted is the
-  worst possible moment to ask someone with ADHD to stop and write a
-  paragraph. Make it required, and people just stop saving.
-- **Restore leads with one next action, not a wall of text.** For dyslexia, a
-  dense summary reads like more homework before you've even started. So the
-  restore screen shows one small, concrete next step first, and everything
-  else stays collapsed behind "More context" until it's asked for.
-- **The reading settings aren't decoration.** Dyslexia-friendly font, larger
-  text, relaxed line spacing, reduced motion — these exist because without
-  them, one of us can't comfortably read the app's own UI. They're real
-  toggles, tested on ourselves, not a checkbox for a features list.
+- The core problem is one the builder lives with: coming back to open files
+  but gone thinking. ([PRD.md](PRD.md) §2)
+- No shame, ever — no "you were gone 2 hours," no streaks — because
+  time-guilt doesn't help you restart. ([PRD.md](PRD.md) §3)
+- Saving can never require a form; the note is optional, because the moment
+  of interruption is the worst time to ask an ADHD student to write a
+  paragraph.
+- Restore leads with one next action, everything else collapsed, so a dense
+  summary never reads like more homework.
+- The reading settings (dyslexia font, larger text, relaxed spacing, reduced
+  motion) are real, tested toggles, not a checklist item.
 
-"Designed with, not just for" isn't a single test session bolted on before
-submission here — it was true for the whole build.
+**Tested with a neurodivergent user.** We tested the restore flow directly
+with a neurodivergent user — Eniola, a dyslexic [RELATIONSHIP — e.g.
+classmate], who walked through a real save-and-interrupt cycle without
+being told how the UI worked first. `[ONE DIRECT QUOTE — her exact words —
+TO BE FILLED IN AFTER THE SESSION]`. In response, we `[ONE CONCRETE CHANGE
+MADE — or "logged this as a known next step" — TO BE FILLED IN]`.
 
 ## Scope (deliberately bounded)
 
@@ -549,10 +601,30 @@ tiny extension beats a weak restore + a fancy extension.
 
 ## Status
 
-`npm run build` (webpack) exits 0. `tsc --noEmit` is clean. Accounts, save,
-and restore have all been runtime-verified against a live Supabase project
-and a real Gemini key. Failure classification (quota/network) has been
-verified live against real Gemini errors, including watching the classifier
-correctly track a live transition between two different real failure modes.
+`npm run build` (webpack) exits 0. `tsc --noEmit` is clean.
+
+**Runtime-verified live**, against the real hosted Supabase project:
+accounts, save, and restore (against a real Gemini key, from an earlier
+pass); failure classification (quota/network), including watching the
+classifier correctly track a live transition between two different real
+Gemini failure modes; and, as of the README/docs sync pass, a direct
+read-only check confirming the memory-pass migration
+(`supabase/migrations/20260808_memory_loop.sql`) has been applied to the
+hosted database — the `user_memory` table and the `save_points.corrections`
+/ `save_points.orienting_answer` columns all exist there. Both configured
+model IDs (`llama-3.3-70b-versatile` on Groq, `gemini-3.5-flash-lite` on
+Gemini) were independently confirmed reachable by calling each provider's
+REST API directly with the project's real keys, bypassing the app.
+
+**Built and passing typecheck/build, not yet runtime-verified end-to-end**:
+the correctable-memory features (evidence receipts, the correction loop,
+the low-context answer→reconstruct loop, "Take me back," the "since your
+last save" diff) and the Groq-primary reconstruction path have not yet been
+exercised through a real save → restore → correct cycle in the running app
+— the `user_memory` table exists but is still empty. Do not read the
+migration/model-reachability checks above as proof these flows work
+end-to-end; they confirm the schema and the providers are ready for that
+pass, not that it's been run.
+
 See `BUILD_REPORT.md` for the full build history, the complete Manual Steps
 Register, and exactly what was verified live versus reasoned through in code.

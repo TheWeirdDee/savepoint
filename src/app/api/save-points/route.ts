@@ -68,6 +68,45 @@ export async function GET(req: NextRequest) {
   return withCors(await handleGet(req));
 }
 
+// DELETE /api/save-points?id=... — permanently remove one point owned by
+// the signed-in user. The ownership filter prevents deleting another user's
+// point even if its UUID is known.
+export async function DELETE(req: NextRequest) {
+  return withCors(await handleDelete(req));
+}
+
+async function handleDelete(req: NextRequest): Promise<NextResponse> {
+  const userId = getUserId(req);
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const id = req.nextUrl.searchParams.get("id")?.trim();
+  if (!id) {
+    return NextResponse.json({ error: "Missing save point id." }, { status: 400 });
+  }
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("save_points")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Could not delete this save point. Try again." },
+      { status: 500 }
+    );
+  }
+  if (!data) {
+    return NextResponse.json({ error: "Save point not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 async function handleGet(req: NextRequest): Promise<NextResponse> {
   const userId = getUserId(req);
   if (!userId) {

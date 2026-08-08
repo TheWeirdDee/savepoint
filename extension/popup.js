@@ -2,7 +2,8 @@
 // to /api/save-points with the signed-in user's token. No dashboard, no AI
 // output here — restore lives in the calm workspace by design.
 
-const DEFAULT_API_BASE = "http://localhost:3000";
+const DEFAULT_API_BASE = "https://savepoint-seven.vercel.app";
+const LEGACY_API_BASE = "http://localhost:3000";
 
 const show = (id) => {
   document.querySelectorAll("section").forEach((s) => s.classList.add("hidden"));
@@ -10,8 +11,42 @@ const show = (id) => {
 };
 
 async function getConfig() {
-  const { apiBase, token } = await chrome.storage.local.get(["apiBase", "token"]);
-  return { apiBase: apiBase || DEFAULT_API_BASE, token: token || null };
+  const { apiBase, token, user, lastSavePointId } =
+    await chrome.storage.local.get(["apiBase", "token", "user", "lastSavePointId"]);
+  const resolvedBase =
+    !apiBase || apiBase.replace(/\/$/, "") === LEGACY_API_BASE
+      ? DEFAULT_API_BASE
+      : apiBase.replace(/\/$/, "");
+  if (resolvedBase !== apiBase) {
+    await chrome.storage.local.set({ apiBase: resolvedBase });
+  }
+  return {
+    apiBase: resolvedBase,
+    token: token || null,
+    user: user || null,
+    lastSavePointId: lastSavePointId || null,
+  };
+}
+
+function showAccount(user) {
+  const text = user?.username ? `Saving to account: ${user.username}` : "";
+  document.getElementById("account-label").textContent = text;
+  document.getElementById("saved-account-label").textContent = text;
+}
+
+async function refreshAccount(apiBase, token) {
+  if (!token) return null;
+  try {
+    const res = await fetch(`${apiBase}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    await chrome.storage.local.set({ user: data.user });
+    return data.user;
+  } catch {
+    return null;
+  }
 }
 
 function showLoginError(message) {
@@ -42,7 +77,8 @@ async function login() {
       showLoginError(data.error || "Username or password is incorrect.");
       return;
     }
-    await chrome.storage.local.set({ token: data.token });
+    await chrome.storage.local.set({ token: data.token, user: data.user });
+    showAccount(data.user);
     document.getElementById("login-password").value = "";
     show("ready");
   } catch {
@@ -53,7 +89,7 @@ async function login() {
 }
 
 async function logout() {
-  await chrome.storage.local.remove("token");
+  await chrome.storage.local.remove(["token", "user", "lastSavePointId"]);
   show("login");
 }
 
@@ -132,17 +168,31 @@ async function save() {
       show("login");
       return;
     }
-    if (!res.ok) throw new Error("bad response");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `Workspace returned ${res.status}.`);
+    }
+    const savePointId = data.savePoint?.id || null;
+    await chrome.storage.local.set({ lastSavePointId: savePointId });
+    const { user } = await getConfig();
+    showAccount(user);
     show("saved");
-  } catch {
+  } catch (error) {
     document.getElementById("error-text").textContent =
-      "Couldn't reach your workspace. Check settings, then try once more.";
+      error instanceof Error
+        ? error.message
+        : "Couldn't reach your workspace. Check settings, then try once more.";
     show("error");
   }
 }
 
 async function init() {
-  const { apiBase, token } = await getConfig();
+  const { apiBase, token, user } = await getConfig();
+  let resolvedUser = user;
+  if (token && !resolvedUser) {
+    resolvedUser = await refreshAccount(apiBase, token);
+  }
+  showAccount(resolvedUser);
   show(token ? "ready" : "login");
 
   document.getElementById("login-submit").addEventListener("click", login);
@@ -168,8 +218,11 @@ async function init() {
   });
   document.getElementById("retry").addEventListener("click", save);
   document.getElementById("open-workspace").addEventListener("click", async () => {
-    const { apiBase } = await getConfig();
-    chrome.tabs.create({ url: apiBase });
+    const { apiBase, lastSavePointId } = await getConfig();
+    const target = lastSavePointId
+      ? `${apiBase}/workspace?point=${encodeURIComponent(lastSavePointId)}`
+      : `${apiBase}/workspace`;
+    chrome.tabs.create({ url: target });
   });
 
   document.getElementById("note").addEventListener("keydown", (e) => {

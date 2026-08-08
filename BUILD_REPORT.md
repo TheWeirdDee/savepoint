@@ -598,6 +598,14 @@ addition was required, only the CORS headers on the server side above.
    workspace side; the extension leg (step 5) is still outstanding.
 7. Record the demo, write the Devpost description, make the repo public.
 8. Run the dyslexic-tester session; write up one quote and one concrete change.
+   **Still not done** — `README.md`'s "Neurodivergent-user evidence" section
+   (README/DOCS SYNC pass) now carries the correct framing (one ADHD
+   builder, one dyslexic tester) with two literal placeholder slots —
+   `` `[ONE DIRECT QUOTE...]` `` and `` `[ONE CONCRETE CHANGE MADE...]` `` —
+   marking exactly where this session's real quote and real change go. This
+   section must be completed with the real quote/change **before
+   submission** and must never be committed or presented with the
+   placeholders left in as if they were real content.
 9. Any git commit/push — never done by this agent.
 
 ---
@@ -1660,3 +1668,138 @@ trusting the source read alone.
 either the SAFETY-NET PASS or the LANDING MOMENT SECTION — it was
 deliberately deleted earlier in this project's history and stays deleted;
 this file is where each pass's close-out notes live instead.
+
+## GROQ PRIMARY / GEMINI FALLBACK PASS
+
+**Outcome:** reconstruction now attempts Groq first and automatically falls
+back to Gemini. The reconstruction prompt, normalization, evidence,
+correctable-memory behavior, database schema, and restore UI were not changed.
+
+**Provider implementation:**
+- Added `groq-sdk` and a lazy, server-only Groq client.
+- Pinned Groq to `llama-3.3-70b-versatile`, JSON-object output,
+  temperature `0.1`, no SDK retries, and a 15-second request ceiling.
+- Refactored the legacy Gemini SDK behind the same small call interface and
+  pinned the default to `gemini-3.5-flash-lite` with a 20-second ceiling.
+- Added a provider-neutral orchestrator. Missing keys are skipped; either key
+  works alone. Provider and invalid-JSON failures from Groq proceed to Gemini.
+- Preserved the existing typed `quota | auth | network | parse` outcome at the
+  API boundary. Failed calls are still never cached or marked restored.
+
+**Operations:**
+- `GET /api/health/ai` remains a zero-call explanation.
+- `GET /api/health/ai?check=1` probes each configured provider and reports
+  Groq primary, Gemini fallback-active, or total unavailability.
+- Updated `.env.example`, local model pin, README, and checklist. No secrets
+  were added to source control.
+- Live model discovery confirmed `gemini-3.5-flash-lite` was reachable with
+  the configured Gemini key; `gemini-flash-latest` failed. Groq live behavior
+  remains a manual check until `GROQ_API_KEY` is supplied.
+
+**Verification:** `npm run typecheck` passed and `npm run build` completed
+successfully with Next.js 16.3.0 (webpack).
+
+## README/DOCS SYNC PASS
+
+Documentation only — no application code, schema, or behavior changed in
+this pass. `README.md`, `ARCHITECTURE.md`, and `PRD.md` still described a
+pre-accounts, Gemini-only, pre-memory-pass version of Save Point in several
+places, despite the GROQ PRIMARY / GEMINI FALLBACK PASS above already
+believing it had brought the README current. It hadn't, fully — this pass
+found and fixed the gaps.
+
+**What was corrected:**
+
+- **Provider order, everywhere it was still Gemini-only.** README's
+  Architecture diagram, project-structure comments (`reconstruct/route.ts`,
+  `health/ai/route.ts`), API reference table, and Resilience section all
+  said or implied "Gemini" as the sole provider. All now read Groq-primary
+  with Gemini as the automatic fallback, and the Resilience section now
+  describes both providers' actual failure-classification method (Gemini via
+  the SDK's typed error classes; Groq via HTTP status + message matching)
+  instead of claiming a single method that only ever applied to Gemini.
+  `ARCHITECTURE.md`'s diagram and AI-pipeline section got the same fix.
+- **Model IDs verified live, not left as an unconfirmed suggestion.** Rather
+  than trust the hardcoded `GEMINI_MODEL=gemini-3.5-flash-lite` and
+  `GROQ_MODEL=llama-3.3-70b-versatile` defaults, both were confirmed
+  reachable by calling each provider's REST API **directly, with the
+  project's real keys, bypassing the app entirely** — `llama-3.3-70b-versatile`
+  returned a real chat completion from Groq (HTTP 200), and
+  `gemini-3.5-flash-lite` returned a real `generateContent` response from
+  Gemini (HTTP 200, `"modelVersion":"gemini-3.5-flash-lite"`). Both IDs are
+  now stated in the docs as confirmed, not suggested.
+- **A related, unplanned finding — not silently ignored:** the app's own
+  `GET /api/health/ai?check=1`, hit against the running dev server, reports
+  *both* providers as unreachable right now, despite the direct-REST checks
+  above succeeding immediately with the same keys. The most likely
+  explanation is that the running dev-server process is holding stale
+  environment values from before the Groq key was finalized — Next.js does
+  not always hot-reload `.env.local` changes into an already-running
+  process. This was **not** fixed in this pass (out of scope — "change no
+  application code, schema, or behavior") but is worth a restart-and-recheck;
+  it is not reflected as a doc claim either way, since it's a transient
+  runtime state, not a fact about the code.
+- **Schema, API, and structure synced to the correctable-memory build.**
+  README's Database schema section now lists `user_memory` and the
+  `save_points.corrections` / `save_points.orienting_answer` columns, and
+  points at the additive migration for an existing database. The API
+  reference table gained the four `/api/memory` rows. The project-structure
+  listing gained `lib/llm.ts`, `lib/providers/groq.ts`, and
+  `components/MemoryPanel.tsx`, and corrected the now-inaccurate
+  `reconstruct.ts` description (it no longer classifies failures itself —
+  that moved to `llm.ts`). `ARCHITECTURE.md` was rewritten section-by-section
+  to match: data contracts, schema, API surface, AI pipeline, and
+  persistence/identity (real accounts, not the old anonymous device id it
+  still described).
+- **A genuine live fact, not previously documented:** a direct, read-only
+  check against the hosted Supabase project (`select id from user_memory
+  limit 1`, `select corrections, orienting_answer from save_points limit 1`,
+  both HTTP 200) confirms `supabase/migrations/20260808_memory_loop.sql` has
+  actually been applied to the live database — the table and columns exist
+  there now. `user_memory` is still empty, though, so this confirms the
+  *schema* is ready, not that the memory/correction feature flows have been
+  exercised end-to-end through the app yet.
+- **Status section rewritten to separate live-verified from built-only,**
+  per the instruction not to let Status imply the correctable-memory
+  features or the Groq path have been runtime-verified end-to-end when they
+  haven't. It now states precisely: accounts/save/restore and Gemini failure
+  classification are live-verified from earlier passes; the migration being
+  live on the hosted DB and both model IDs being reachable are newly
+  live-verified by this pass; but the memory/correction/take-me-back/
+  since-last-save feature flows and the Groq reconstruction path have not
+  yet been exercised through a real save → restore → correct cycle in the
+  running app. `BUILD_REPORT.md` remains the pointer for the full breakdown.
+- **The neurodivergent-user evidence section — the important one.**
+  Replaced the "built by two neurodivergent students, Divine and Eniola"
+  framing (inaccurate — Eniola is a tester, not a co-builder) with the exact
+  structure specified: one ADHD builder from lived experience, tested with a
+  dyslexic user, and two **literal, visible placeholder slots** —
+  `` `[ONE DIRECT QUOTE — her exact words — TO BE FILLED IN AFTER THE SESSION]` ``
+  and `` `[ONE CONCRETE CHANGE MADE — ... — TO BE FILLED IN]` `` — for the
+  real quote and real change once that session happens. No quote or outcome
+  was invented to fill them. The same "two students" claim also appeared in
+  `PRD.md`'s rubric-mapping section (§10) and was corrected there too, along
+  with two other stale `PRD.md` claims found during this pass: §8 still
+  listed "user accounts/auth (use an anonymous device id)" as a non-goal
+  (accounts exist now — see the ACCOUNTS PASS above) and §9 still named
+  "free Google Gemini Flash" as the sole AI constraint.
+- **One unrelated but concrete factual bug, fixed as found:** README's
+  "Running it locally" step said to open `http://localhost:3000`; the
+  project's actual `dev`/`start` scripts pin port `4477`
+  (`package.json`). Corrected.
+
+**Confirmed, not just asserted:**
+- No application code, database schema, or runtime behavior was changed —
+  `git status`-equivalent review of this pass's edits touches only
+  `README.md`, `ARCHITECTURE.md`, `PRD.md`, and this file.
+- No fabricated evidence: the two placeholder slots in the
+  neurodivergent-user evidence section are left as literal, visibly-marked
+  placeholders, not invented quotes — see the added Manual Steps Register
+  note (step 8, above) requiring they be filled with the real quote/change
+  before submission and never presented as real content in the meantime.
+- `npx tsc --noEmit` → clean, exit 0. `npm run build --webpack` →
+  `✓ Compiled successfully`, all routes unchanged (expected — no code touched).
+- `SAVE_POINT_CHECKLIST.md` was not created or updated — consistent with
+  every prior pass this session, it stays deleted from version control per
+  the standing instruction; this file is where its close-out notes go
+  instead.

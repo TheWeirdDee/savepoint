@@ -97,15 +97,21 @@ export default function DocsPage() {
               </li>
             </ol>
             <p className="mt-4">
-              Now the popup&apos;s <strong className="text-ink">Save where my brain is</strong> captures
+              The popup shows exactly which username will own the save. Its{" "}
+              <strong className="text-ink">Save where my brain is</strong> action captures
               the active tab, any selected text, a short page snippet, and your
               other open tab titles — plus an optional note — into the same
-              account as your workspace saves. Restore always happens back in
-              the workspace, never in the popup. If your session ever expires,
-              the popup drops back to the login form automatically.
+              account as your workspace saves. After saving,{" "}
+              <strong className="text-ink">Open workspace</strong> opens that exact
+              point at <code className="rounded bg-mist px-1.5 py-0.5 text-ink">/workspace</code>.
+              The website and extension keep separate sessions, so their shown
+              usernames must match. If the extension session expires, the popup
+              returns to its login form.
             </p>
             <p className="mt-4">
-              If the workspace isn&apos;t running at <code className="rounded bg-mist px-1.5 py-0.5 text-ink">http://localhost:3000</code>,
+              Production defaults to <code className="rounded bg-mist px-1.5 py-0.5 text-ink">https://savepoint-seven.vercel.app</code>;
+              local development uses <code className="rounded bg-mist px-1.5 py-0.5 text-ink">http://localhost:4477</code>.
+              If you need to switch,
               right-click the extension icon → <strong className="text-ink">Options</strong> and
               change the <strong className="text-ink">Workspace address</strong> to match — for
               example <code className="rounded bg-mist px-1.5 py-0.5 text-ink">https://savepoint-seven.vercel.app</code> to

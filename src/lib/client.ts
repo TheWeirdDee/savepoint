@@ -243,6 +243,14 @@ export async function listSavePoints(): Promise<{
   return parseJson(res);
 }
 
+export async function deleteSavePoint(savePointId: string): Promise<void> {
+  const res = await fetch(
+    `/api/save-points?id=${encodeURIComponent(savePointId)}`,
+    { method: "DELETE" }
+  );
+  await parseJson(res);
+}
+
 // Demo mode: NEXT_PUBLIC_DEMO_MODE=1 (build-time) or ?demo=1 on /workspace
 // (per-visit) both work. This is the ONLY thing demo mode affects — it never
 // touches save creation, listing, correction, or the database in any way,

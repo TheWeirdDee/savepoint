@@ -54,18 +54,18 @@ Not a chatbot. The model **fuses incomplete signals** (optional note + document 
 
 ## 8. Non-goals (explicitly OUT)
 
-Collaboration, teacher dashboards, automatic interruption detection, continuous/passive monitoring, browser-history reading, full rich-text editor, calendar/reminders, gamification, cross-device sync beyond the database, user accounts/auth (use an anonymous device id). One user, one document at a time, manual save points.
+Collaboration, teacher dashboards, automatic interruption detection, continuous/passive monitoring, browser-history reading, full rich-text editor, calendar/reminders, gamification, OAuth, email verification. One user, one document at a time, manual save points. (Simple username/password accounts were added after this PRD's first draft — see [README.md](README.md#accounts) — but the exclusions above, and the "one user, one document" scope, still hold.)
 
 ## 9. Constraints
 
-- Stack fixed: Next.js (latest, App Router, TS, `src/`), Tailwind, **webpack (never Turbopack)**, Supabase, **free Google Gemini Flash** for AI.
+- Stack fixed: Next.js (latest, App Router, TS, `src/`), Tailwind, **webpack (never Turbopack)**, Supabase, **free Groq (primary) with Gemini as an automatic fallback** for AI.
 - Chrome extension is **desktop-only** (MV3 does not run on mobile browsers); the web app covers mobile.
 - Zero paid services. Gemini free tier + Supabase free tier only.
 - No git operations by the build agent.
 
 ## 10. Success — rubric mapping (IncludAI / Stanford NNEA)
 
-- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed and tested by the two neurodivergent students building it (ADHD, dyslexia) — see [README.md](README.md#neurodivergent-user-evidence) for specifics.
+- **Impact on ND youth — 30%:** solves the under-served re-entry problem; strengths-framed; designed by a neurodivergent (ADHD) student from lived experience, and tested with a dyslexic user — see [README.md](README.md#neurodivergent-user-evidence) for specifics, including what's confirmed versus still pending.
 - **Innovation in AI — 25%:** sparse-signal fusion + confidence tiers + no-fabrication low-context path.
 - **Usability & accessibility — 25%:** one-action save, next-action-first restore, progressive disclosure, dyslexia mode, reduced motion, keyboard/ARIA.
 - **Technical execution — 10%:** clean build, shared schema, structured AI output, persistence, working extension.

@@ -6,6 +6,7 @@ import type { SavePoint, SavePointCapture, ReconstructOutcome, AuthUser } from "
 import {
   buildWorkspaceCapture,
   createSavePoint,
+  deleteSavePoint,
   listSavePoints,
   restoreSavePoint,
   loadDraft,
@@ -73,6 +74,8 @@ export function Workspace({ user }: { user: AuthUser }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [savePoints, setSavePoints] = useState<SavePoint[]>([]);
+  const [savePointsLoaded, setSavePointsLoaded] = useState(false);
+  const [handoffError, setHandoffError] = useState("");
   const [offer, setOffer] = useState<SavePoint | null>(null);
   const [offerDismissed, setOfferDismissed] = useState(false);
   const [view, setView] = useState<View>({ mode: "writing" });
@@ -83,6 +86,7 @@ export function Workspace({ user }: { user: AuthUser }) {
   const [idleOffer, setIdleOffer] = useState(false);
   const [safetySaving, setSafetySaving] = useState(false);
   const hydratedRef = useRef(false);
+  const handledExtensionPointRef = useRef<string | null>(null);
   // What's actually been saved so far — starts empty, and is only ever
   // updated the moment a real save point is created (see handleSave). This
   // is what "unsaved changes" is measured against, so the idle offer can
@@ -120,7 +124,8 @@ export function Workspace({ user }: { user: AuthUser }) {
       })
       .catch(() => {
         /* offline / not configured — workspace still usable */
-      });
+      })
+      .finally(() => setSavePointsLoaded(true));
   }, [user.id]);
 
   // Persist the draft as they type so the workspace itself survives a reload.
@@ -238,6 +243,31 @@ export function Workspace({ user }: { user: AuthUser }) {
     }
   }, []);
 
+  // The extension hands off the exact point it just created. Open it instead
+  // of dropping the student on the marketing page. If it is absent from this
+  // account, the extension and website are signed in as different users.
+  useEffect(() => {
+    const pointId = searchParams.get("point");
+    if (
+      !pointId ||
+      !savePointsLoaded ||
+      handledExtensionPointRef.current === pointId
+    ) {
+      return;
+    }
+    handledExtensionPointRef.current = pointId;
+    const point = savePoints.find((item) => item.id === pointId);
+    router.replace("/workspace");
+    if (point) {
+      setHandoffError("");
+      void openRestore(point);
+    } else {
+      setHandoffError(
+        "That extension save belongs to a different signed-in account. Check the username shown in the extension, then sign into the same account here."
+      );
+    }
+  }, [openRestore, router, savePoints, savePointsLoaded, searchParams]);
+
   // A failed reconstruction is never cached, so retrying just re-runs the
   // same restore — no special "force" flag needed for that case, but
   // passing force=true also lets someone deliberately ask for a fresh take
@@ -298,6 +328,17 @@ export function Workspace({ user }: { user: AuthUser }) {
     );
   }, []);
 
+  const handleDeleteSavePoint = useCallback(async (point: SavePoint) => {
+    await deleteSavePoint(point.id);
+    setSavePoints((previous) => previous.filter((item) => item.id !== point.id));
+    setOffer((current) => (current?.id === point.id ? null : current));
+    setView((current) =>
+      "savePoint" in current && current.savePoint.id === point.id
+        ? { mode: "writing" }
+        : current
+    );
+  }, []);
+
   const backToWriting = useCallback(() => {
     setView({ mode: "writing" });
     setShowExample(false);
@@ -348,8 +389,14 @@ export function Workspace({ user }: { user: AuthUser }) {
             <SavePointList
               savePoints={savePoints}
               onOpen={openRestore}
+              onDelete={handleDeleteSavePoint}
               onSeeExample={() => setShowExample(true)}
             />
+            {handoffError && (
+              <p role="alert" className="mt-3 text-sm text-ask">
+                {handoffError}
+              </p>
+            )}
           </div>
 
           <AccessibilityBar variant="inline" />
