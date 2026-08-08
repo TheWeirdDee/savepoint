@@ -3,6 +3,8 @@ import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
 
 export const metadata: Metadata = {
   title: "Reset password · Save Point",
+  description: "Get a password reset link sent to your email.",
+  robots: { index: false, follow: false },
 };
 
 export default function ForgotPasswordPage() {

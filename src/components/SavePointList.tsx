@@ -13,18 +13,34 @@ const VISIBLE_COUNT = 5;
 export function SavePointList({
   savePoints,
   onOpen,
+  onSeeExample,
 }: {
   savePoints: SavePoint[];
   onOpen: (sp: SavePoint) => void;
+  onSeeExample?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
 
   if (savePoints.length === 0) {
     return (
-      <p className="text-sm text-ink-soft">
-        No save points yet. When you&apos;re deep in something and need to step
-        away, save your place — I&apos;ll hold the thread.
-      </p>
+      <div>
+        <p className="text-sm text-ink-soft">
+          No save points yet. When you&apos;re deep in something and need to
+          step away, save your place — I&apos;ll hold the thread.
+        </p>
+        {onSeeExample && (
+          <p className="mt-2 text-sm text-ink-soft">
+            New here?{" "}
+            <button
+              onClick={onSeeExample}
+              className="font-bold text-sage underline underline-offset-2"
+            >
+              See an example restore
+            </button>{" "}
+            to watch it in action.
+          </p>
+        )}
+      </div>
     );
   }
 

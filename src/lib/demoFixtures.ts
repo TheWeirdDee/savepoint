@@ -1,4 +1,4 @@
-import type { ReconstructedState } from "./types";
+import type { ReconstructedState, SavePoint } from "./types";
 
 // DEMO DATA — never real. Used only when demo mode is explicitly on
 // (NEXT_PUBLIC_DEMO_MODE=1, or ?demo=1 on /workspace), so the save→restore
@@ -36,4 +36,27 @@ export const DEMO_RECONSTRUCTED_STATE: ReconstructedState = {
   },
   lowContext: false,
   orientingQuestion: "",
+};
+
+// Not a second demo fixture — just the SavePoint envelope RestoreCard needs
+// around DEMO_RECONSTRUCTED_STATE to render (MoreContext reads userNote /
+// workspaceContext / openTabs off it). The reconstruction content is the
+// exact same fixture above, never duplicated. Used only by the "See an
+// example restore" preview in the empty workspace (Workspace.tsx) — never
+// written to the database, never returned by any API route.
+export const EXAMPLE_SAVE_POINT: SavePoint = {
+  id: "example",
+  userId: "example",
+  source: "workspace",
+  userNote:
+    "still weighing Source A vs Source B, also thinking about the counterargument from class",
+  activeContext: {},
+  openTabs: [],
+  workspaceContext: {
+    documentTitle: "Biology report",
+  },
+  reconstruction: DEMO_RECONSTRUCTED_STATE,
+  restored: true,
+  restoredAt: null,
+  createdAt: new Date(0).toISOString(),
 };

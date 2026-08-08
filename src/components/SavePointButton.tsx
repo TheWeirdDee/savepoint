@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MarkerDot } from "./MarkerDot";
 
 // One deliberate action. The note is optional and dictatable — never a required
 // form. Saving is instant and forgiving: no "are you sure", no modal.
@@ -67,7 +68,7 @@ export function SavePointButton({
         role="status"
         className="flex items-center justify-center gap-3 rounded-lg bg-sage/10 px-5 py-4 text-center font-bold text-sage"
       >
-        <span aria-hidden className="h-3 w-3 animate-marker-pulse rounded-full bg-marker" />
+        <MarkerDot className="animate-marker-pulse text-base" />
         Save point created. You can leave whenever you need to.
       </div>
     );

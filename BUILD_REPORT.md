@@ -1064,3 +1064,238 @@ website." Two things were built in response:
   device or mobile emulator, not something scriptable from here). The code
   paths, capture-scope limits, and URL-handoff logic were verified by
   reading and by the clean build, not by an end-to-end click-through.
+
+## INTERACTIVE HERO PASS
+
+The landing hero's restore-card mock (`src/app/page.tsx`) was static markup —
+a screenshot pretending to be a screenshot. Replaced it with
+`src/components/HeroRestoreCard.tsx`, a client component that plays the real
+save → restore beat in miniature and lets the two novel behaviors (asking
+instead of guessing; correcting it in one tap) actually happen under a
+judge's cursor, not just get described in copy above it. No new dependency,
+no network/AI/DB call — confirmed by reading the file: the only I/O in the
+component is `IntersectionObserver` and `setTimeout`, nothing that touches
+`fetch`, `@supabase/supabase-js`, or any `/api/*` route.
+
+**Sequence:** the card mounts collapsed to a single "Saving your place…"
+pill. On entering the viewport (`IntersectionObserver`, `threshold: 0.4`,
+disconnected after first fire so it plays once, never loops) it grows in
+four staggered steps — next step, where-you-were, the uncertain decision,
+the "Also on your mind" side-thread line — each a freshly-mounted block
+using the existing `.animate-rise` keyframe (already in `globals.css`, so no
+new CSS was needed). A small "↺ Replay" button resets and replays it on
+demand.
+
+**Reduced motion is a hard skip, not a fast-forward.** `play()` checks
+both the OS setting and the app's own toggle before doing anything:
+
+```ts
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  const osReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const appReduced = document.documentElement.classList.contains("motion-off");
+  return osReduced || appReduced;
+}
+
+function play() {
+  clearTimers();
+  if (prefersReducedMotion()) {
+    setStep(4);
+    return;
+  }
+  setStep(0);
+  ...
+}
+```
+
+This matters because the stagger is driven by `setTimeout`, which the
+global CSS reduced-motion rule (`animation-duration: 0.001ms !important`)
+cannot reach — a purely CSS-side guard would still leave someone with
+motion sensitivity watching four timed pop-ins, just with instant fades. The
+JS check above skips straight to the fully-revealed state (`step === 4`) so
+the "Saving your place…" pill is never even shown.
+
+**The chips are real state, and the correction genuinely propagates** — not
+two `<span>`s masquerading as an interaction, and not a separate untouched
+copy of the next-step text:
+
+```tsx
+<button
+  type="button"
+  onClick={() => setDecision("confirmed")}
+  ...
+>
+  Yes
+</button>
+<button
+  type="button"
+  onClick={() => setDecision("corrected")}
+  ...
+>
+  No, it was A
+</button>
+```
+
+```ts
+const nextStepText =
+  decision === "corrected"
+    ? "Write two sentences on why Source A is more reliable."
+    : "Write two sentences on why Source B is more reliable.";
+```
+
+Clicking "No, it was A" both resolves the uncertainty block to "Updated —
+you preferred Source A." and swaps the "Your next step" text above it to
+the Source-A phrasing — the same one `decision` state drives both, so they
+can't drift out of sync. Both buttons are real `<button>` elements (keyboard
+reachable, `:focus-visible` from the existing global rule applies
+automatically) with `aria-label`s; the container carries an `aria-label`
+that states plainly it's an example, not the visitor's real data, so
+screen-reader users get the same honesty sighted users get from context.
+
+**Skipped:** the prompt's close-out step asked to also update
+`SAVE_POINT_CHECKLIST.md`. That file was deliberately deleted in an earlier
+commit ("Remove internal build-process docs, expand README into full
+project documentation") — recreating it here would undo that cleanup, so
+this note in `BUILD_REPORT.md` stands in for it instead.
+
+**Verification:**
+- `npx tsc --noEmit` → clean.
+- `npm run build --webpack` → `✓ Compiled successfully`, all 16 routes
+  unchanged (this pass touches no route, only the landing page's client
+  markup).
+- Server-rendered HTML fetched from a running `next dev` instance and
+  grepped directly — confirms the collapsed initial state, the replay
+  control, and the ambient pulse class are all present in the first paint:
+  `Saving your place…`, `Replay the restore example`, `animate-card-pulse`
+  all found.
+- **Not runtime-verified in this pass:** actual click-through of the Yes/No
+  chips and the reduced-motion skip path in a real browser (no browser
+  automation available here) — verified by reading the state logic and by
+  the server-rendered initial markup instead.
+
+## SHOW-THE-MAGIC PASS + mobile fixes + brand cleanup
+
+Two problems, addressed together: (1) the empty workspace showed nothing —
+a first-time visitor with no save points yet had no way to see what a
+restore even looks like without doing the whole save → wait → restore loop
+themselves; (2) three concrete issues from real mobile screenshots the
+person sent — the desktop-extension callout showing on phones (which can't
+run it), the inline reading-settings panel eating the whole first screen,
+and two different logo treatments in the app.
+
+**Part 1 — inert preview.** `src/components/RestorePreview.tsx` (new):
+renders when the workspace is empty (`!title.trim() && !content.trim()`,
+computed in `Workspace.tsx`), `pointer-events-none` and `opacity-60`, tagged
+"Example," showing mock next-step/where-you-were/uncertainty/thread text so
+a first-time visitor sees the shape of a restore before ever saving
+anything. It is not interactive itself — the one live control on it is a
+"See an example restore →" button.
+
+**Part 2 — one-click real example restore.** That button, and a matching
+one added to `SavePointList.tsx`'s empty state ("New here? See an example
+restore to watch it in action"), both call `onSeeExample`, which
+`Workspace.tsx` wires to `setShowExample(true)`. This swaps the writing pane
+for the actual `RestoreCard` component — the same one real restores use —
+fed `EXAMPLE_SAVE_POINT` / `DEMO_RECONSTRUCTED_STATE` from
+`src/lib/demoFixtures.ts` (an existing fixture, not new content) via
+`outcome={{ ok: true, state: DEMO_RECONSTRUCTED_STATE }}`. No `fetch`, no
+`@supabase/supabase-js`, no `/api/*` route — reading `Workspace.tsx`
+confirms `setShowExample` only flips local component state. A yellow-free
+"EXAMPLE — not your saved data" badge sits above the card and a "← Close
+example" button returns to the empty writing view.
+
+Because the Yes/No confirmation buttons on `RestoreCard` normally call
+`correctDecision()` (a real API mutation), a `readOnly` prop was added to
+`RestoreCard` and threaded to its inner `Confirm` component: when true, the
+buttons still update local UI state (so the example still *feels*
+interactive) but skip the network call entirely. This is the same
+component in both modes, not a fork — so the example can never visually
+drift from what a real restore looks like.
+
+**Part 3 — desktop-extension box hidden on mobile.** The "Using the desktop
+extension?" callout in the workspace's left rail is real advice for a
+platform mobile users don't have — Chrome extensions don't run on phones.
+Wrapped it `hidden lg:block` and added a sibling box wrapped `lg:hidden`
+pointing mobile users at `/docs#mobile` ("On your phone? Get the
+bookmarklet") instead, so every viewport gets an accurate, actionable
+pointer rather than a dead end.
+
+**Part 4 — collapsible reading settings on mobile.** `AccessibilityBar`'s
+`variant="inline"` branch was always fully expanded, which on a phone meant
+the text-size/spacing/dyslexia-font/motion controls ate the entire first
+screen before any actual workspace content appeared. Rewrote it as a
+disclosure: a button (`Reading settings ▸`, `aria-expanded`,
+`aria-controls`) that reveals the same `AccessibilityControls` panel only
+on click, collapsed by default. Keyboard and screen-reader semantics
+(`aria-expanded`/`aria-controls`) are real attributes, not decorative.
+
+**Part 5 — one brand glyph, everywhere.** The app had two logo treatments:
+a plain `<span className="rounded-full bg-marker" />` CSS dot in most
+places, and the literal `◍` (FISHEYE, U+25C9) character used in copy. Added
+`src/components/MarkerDot.tsx` — a one-line shared component rendering `◍`
+in `text-marker` — and swapped every CSS-dot instance to it: the landing
+page nav/hero/section-eyebrows/footer (9 instances), `/docs`' back link,
+`HeroRestoreCard`'s animated status dot (kept its `animate-marker-pulse`
+class), `SavePointButton`'s save-confirmation pulse dot, and the workspace
+header wordmark. Verified via `grep` that zero `rounded-full bg-marker`
+instances remain outside Tailwind's own utility definitions.
+
+**Part 6 — favicon and metadata.** Added code-generated
+`src/app/icon.tsx` (32×32), `src/app/apple-icon.tsx` (180×180), and
+`src/app/opengraph-image.tsx` (1200×630) via `next/og`'s `ImageResponse`,
+replacing Vercel's default triangle favicon. `src/app/layout.tsx`'s
+`metadata` export was expanded with `metadataBase`, `description`,
+`keywords`, `openGraph`, and `twitter` card fields built from a shared
+thesis/description pair; `login`, `signup`, `workspace`,
+`forgot-password`, and `reset-password/[token]` pages each got a real
+`description` (session-gated pages also got `robots: { index: false,
+follow: false }`, since nothing behind login belongs in a search index).
+
+**Bug caught and fixed in this same pass, not pre-existing:** the first
+build of `icon.tsx`/`apple-icon.tsx`/`opengraph-image.tsx` used the literal
+`◍` character inside `ImageResponse`, and the build log showed `Failed to
+load dynamic font for ◍ . Error: Failed to download dynamic font. Status:
+400` on all three routes. This wasn't cosmetic — copying the generated
+`icon.body` out of `.next/server/app` and opening it showed a tofu/
+missing-glyph box, not the mark. `next/og`'s underlying renderer (satori)
+fetches a covering font from Google's API per non-ASCII glyph at render
+time, and that fetch failed outright rather than falling back. Fixed by
+not depending on font glyph coverage at all: redrew the mark as two nested
+`div`s (a ring `border-radius: 50%` circle with a smaller filled circle
+centered inside it), which is font-independent and renders identically
+regardless of network access. Rebuilt and copied all three `.body` files
+out again to confirm visually — favicon and apple-icon now show the
+correct ring-and-dot mark, no font warning in the build log.
+
+That same visual check surfaced a second, unrelated pre-existing bug: the
+OG image's headline text was overlapping itself (the colored word
+"thinking" rendered on top of "left off." instead of flowing after it).
+Cause: a `display: flex` container (no `flexWrap`) held a raw text node
+and a `<span>` as two flex siblings — with no wrap allowed, satori couldn't
+break either item onto a new line and instead overlaid them. Fixed by
+splitting the headline into three explicit `<span>`s with normal spaces and
+adding `flexWrap: "wrap"` to the container, letting satori's real text
+layout wrap each span at word boundaries. Rebuilt and visually confirmed
+the headline now flows correctly across three lines with "thinking" in
+sage-green, no overlap.
+
+**Skipped, deliberately:** `SAVE_POINT_CHECKLIST.md` was not recreated —
+it was explicitly deleted earlier in this project's history and stays
+deleted; this section of `BUILD_REPORT.md` is where its close-out notes
+live instead.
+
+**Verification:**
+- `npx tsc --noEmit` → clean, exit 0.
+- `npm run build --webpack` → `✓ Compiled successfully`, all 20 routes
+  generated including the three new static image routes (`○ /icon`,
+  `○ /apple-icon`, `○ /opengraph-image`), no warnings.
+- All three generated images (`icon.body`, `apple-icon.body`,
+  `opengraph-image.body`) copied out of `.next/server/app` and inspected
+  visually after the glyph/layout fixes — confirmed correct, not just
+  "built without error."
+- **Not runtime-verified in this pass:** actual phone rendering of the
+  collapsible reading-settings button and the extension/bookmarklet
+  breakpoint split (no device/browser automation available here) — the
+  Tailwind breakpoint classes (`hidden lg:block` / `lg:hidden`) and the
+  disclosure's `aria-expanded` state were verified by reading the compiled
+  markup and component logic, not by an actual narrow-viewport screenshot.

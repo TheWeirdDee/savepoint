@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { FaqAccordion } from "@/components/FaqAccordion";
 import { BookmarkletSection } from "@/components/BookmarkletSection";
+import { MarkerDot } from "@/components/MarkerDot";
 
 export const metadata: Metadata = {
   title: "Docs · Save Point",
@@ -13,7 +14,7 @@ export default function DocsPage() {
     <div className="py-14 sm:py-20">
       <div className="wrap">
         <a href="/" className="flex items-center gap-2 font-mono text-sm font-bold text-ink-soft transition-colors hover:text-ink">
-          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-marker" />
+          <MarkerDot />
           ← Back to Save Point
         </a>
 

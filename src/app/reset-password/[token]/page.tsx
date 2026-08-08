@@ -3,6 +3,8 @@ import { ResetPasswordForm } from "@/components/ResetPasswordForm";
 
 export const metadata: Metadata = {
   title: "Set a new password · Save Point",
+  description: "Choose a new password for your Save Point account.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ResetPasswordPage({

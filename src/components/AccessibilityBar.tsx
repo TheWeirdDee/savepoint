@@ -81,10 +81,22 @@ export function AccessibilityBar({
   if (variant === "inline") {
     return (
       <div className="rounded-card border border-line bg-mist p-4">
-        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-soft">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-ink-soft"
+        >
           Reading settings
-        </p>
-        <AccessibilityControls prefs={prefs} update={update} panelId={panelId} />
+          <span aria-hidden className={`transition-transform ${open ? "rotate-90" : ""}`}>
+            ▸
+          </span>
+        </button>
+        {open && (
+          <div className="mt-3">
+            <AccessibilityControls prefs={prefs} update={update} panelId={panelId} />
+          </div>
+        )}
       </div>
     );
   }

@@ -3,6 +3,7 @@ import { SignupForm } from "@/components/SignupForm";
 
 export const metadata: Metadata = {
   title: "Sign up · Save Point",
+  description: "Create a free Save Point account — email, full name, username, and password. No card, no OAuth.",
 };
 
 export default function SignupPage() {

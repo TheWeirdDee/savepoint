@@ -16,9 +16,12 @@ import {
 import { SavePointButton } from "./SavePointButton";
 import { RestoreOffer } from "./RestoreOffer";
 import { RestoreCard } from "./RestoreCard";
+import { RestorePreview } from "./RestorePreview";
 import { SavePointList } from "./SavePointList";
 import { AccessibilityBar } from "./AccessibilityBar";
 import { PendingCaptureCard } from "./PendingCaptureCard";
+import { MarkerDot } from "./MarkerDot";
+import { DEMO_RECONSTRUCTED_STATE, EXAMPLE_SAVE_POINT } from "@/lib/demoFixtures";
 
 // What the mobile bookmarklet (see /docs) packs into ?capture= — the same
 // scope as the extension's activeContext, nothing more.
@@ -45,6 +48,12 @@ export function Workspace({ user }: { user: AuthUser }) {
   const [view, setView] = useState<View>({ mode: "writing" });
   const [loggingOut, setLoggingOut] = useState(false);
   const [pendingCapture, setPendingCapture] = useState<BookmarkletCapture | null>(null);
+  const [showExample, setShowExample] = useState(false);
+
+  // A genuinely blank workspace — nothing typed yet. This is the moment the
+  // preview and the example button exist for; the instant there's real
+  // content, the promise has done its job and gets out of the way.
+  const isEmpty = !title.trim() && !content.trim();
 
   // Load draft + past save points on mount. The unrestored one becomes the offer.
   useEffect(() => {
@@ -120,6 +129,7 @@ export function Workspace({ user }: { user: AuthUser }) {
   const openRestore = useCallback(async (sp: SavePoint, force = false) => {
     setView({ mode: "restoring", savePoint: sp });
     setOffer(null);
+    setShowExample(false);
     // restoreSavePoint never throws — it always resolves to a ReconstructOutcome,
     // so a real failure renders its own honest card instead of silently
     // bouncing back to the writing view.
@@ -141,7 +151,10 @@ export function Workspace({ user }: { user: AuthUser }) {
     [openRestore]
   );
 
-  const backToWriting = useCallback(() => setView({ mode: "writing" }), []);
+  const backToWriting = useCallback(() => {
+    setView({ mode: "writing" });
+    setShowExample(false);
+  }, []);
 
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
@@ -154,7 +167,7 @@ export function Workspace({ user }: { user: AuthUser }) {
     <div className="wrap py-8 sm:py-12">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 font-mono text-base font-bold text-ink">
-          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full bg-marker" />
+          <MarkerDot />
           Save&nbsp;Point
         </a>
         <div className="flex items-center gap-4">
@@ -185,12 +198,18 @@ export function Workspace({ user }: { user: AuthUser }) {
             <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-soft">
               Your save points
             </h2>
-            <SavePointList savePoints={savePoints} onOpen={openRestore} />
+            <SavePointList
+              savePoints={savePoints}
+              onOpen={openRestore}
+              onSeeExample={() => setShowExample(true)}
+            />
           </div>
 
           <AccessibilityBar variant="inline" />
 
-          <div className="rounded-card border border-line bg-mist p-4 text-sm text-ink-soft">
+          {/* Desktop only — extensions don't run on mobile, so this would
+              just be confusing clutter there. See the mobile box below. */}
+          <div className="hidden rounded-card border border-line bg-mist p-4 text-sm text-ink-soft lg:block">
             <p className="font-bold text-ink-soft">Using the desktop extension?</p>
             <p className="mt-1.5">
               Install it, open it, and sign in with the same username — it links
@@ -201,6 +220,22 @@ export function Workspace({ user }: { user: AuthUser }) {
               className="mt-2 inline-block text-sage underline underline-offset-2"
             >
               Load the extension
+            </a>
+          </div>
+
+          {/* Mobile/tablet only — the extension's actual replacement here. */}
+          <div className="rounded-card border border-line bg-mist p-4 text-sm text-ink-soft lg:hidden">
+            <p className="font-bold text-ink-soft">On your phone?</p>
+            <p className="mt-1.5">
+              Chrome extensions don&apos;t run on mobile — that&apos;s an
+              Apple/Google restriction, not something this build chose. A
+              one-tap bookmarklet captures pages the same way instead.
+            </p>
+            <a
+              href="/docs#mobile"
+              className="mt-2 inline-block text-sage underline underline-offset-2"
+            >
+              Get the bookmarklet
             </a>
           </div>
         </aside>
@@ -254,28 +289,51 @@ export function Workspace({ user }: { user: AuthUser }) {
             </div>
           )}
 
-          {view.mode === "writing" && (
-            <section className="rounded-card bg-mist p-6 shadow-card sm:p-8">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="What are you working on? (e.g. Biology report)"
-                aria-label="Document title"
-                className="w-full bg-transparent text-lg font-bold text-ink placeholder:text-ink-soft/60 focus:outline-none"
-              />
-              <div className="my-4 h-px bg-line" />
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write, research, think here. When you need to step away, save your place below — I'll hold the thread so you don't have to."
-                aria-label="Your work"
-                rows={16}
-                className="w-full resize-none bg-transparent text-ink placeholder:text-ink-soft/50 focus:outline-none"
-              />
-              <div className="mt-6">
-                <SavePointButton onSave={handleSave} />
+          {view.mode === "writing" && showExample && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-marker/40 bg-marker/10 px-4 py-3 text-center text-sm font-bold text-marker">
+                EXAMPLE — not your saved data
               </div>
-            </section>
+              <RestoreCard
+                savePoint={EXAMPLE_SAVE_POINT}
+                outcome={{ ok: true, state: DEMO_RECONSTRUCTED_STATE }}
+                readOnly
+              />
+              <button
+                onClick={() => setShowExample(false)}
+                className="text-ink-soft transition-colors hover:text-ink"
+              >
+                ← Close example
+              </button>
+            </div>
+          )}
+
+          {view.mode === "writing" && !showExample && (
+            <>
+              <section className="rounded-card bg-mist p-6 shadow-card sm:p-8">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="What are you working on? (e.g. Biology report)"
+                  aria-label="Document title"
+                  className="w-full bg-transparent text-lg font-bold text-ink placeholder:text-ink-soft/60 focus:outline-none"
+                />
+                <div className="my-4 h-px bg-line" />
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write, research, think here. When you need to step away, save your place below — I'll hold the thread so you don't have to."
+                  aria-label="Your work"
+                  rows={16}
+                  className="w-full resize-none bg-transparent text-ink placeholder:text-ink-soft/50 focus:outline-none"
+                />
+                <div className="mt-6">
+                  <SavePointButton onSave={handleSave} />
+                </div>
+              </section>
+
+              {isEmpty && <RestorePreview onSeeExample={() => setShowExample(true)} />}
+            </>
           )}
         </main>
       </div>

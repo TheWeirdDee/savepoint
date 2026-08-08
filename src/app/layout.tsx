@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible, Lexend, Space_Mono } from "next/font/google";
 import { AccessibilityBar } from "@/components/AccessibilityBar";
 import "./globals.css";
@@ -30,9 +30,46 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
+const THESIS =
+  "Most tools restore your files. Save Point restores where your thinking left off.";
+const DESCRIPTION =
+  "An AI re-entry tool for neurodivergent students. Save your cognitive state in one tap, then restore your thinking — not just your tabs — with a next action, where you were, and what you'd figured out. Asks instead of fabricating when it's unsure.";
+const SITE_URL = "https://savepoint-seven.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Save Point",
-  description: "Restores where your thinking left off.",
+  description: DESCRIPTION,
+  applicationName: "Save Point",
+  keywords: [
+    "ADHD",
+    "neurodivergent",
+    "cognitive re-entry",
+    "AI reconstruction",
+    "accessibility",
+    "study tool",
+  ],
+  authors: [{ name: "Save Point" }],
+  openGraph: {
+    title: THESIS,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Save Point",
+    type: "website",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: THESIS }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: THESIS,
+    description: DESCRIPTION,
+    images: ["/opengraph-image"],
+  },
+};
+
+// Low-glare by default, on the browser chrome too — a warm paper background
+// instead of a stark white or default-dark address bar on mobile.
+export const viewport: Viewport = {
+  themeColor: "#F7F6F2",
 };
 
 // Apply stored accessibility prefs before first paint (no flash of default state).

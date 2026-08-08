@@ -8,6 +8,9 @@ import { Workspace } from "@/components/Workspace";
 
 export const metadata: Metadata = {
   title: "Workspace · Save Point",
+  description: "Write, save, and restore where your thinking left off.",
+  // Signed-in workspace content — nothing here belongs in a search index.
+  robots: { index: false, follow: false },
 };
 
 // Never statically rendered — this page reads the session cookie per request.

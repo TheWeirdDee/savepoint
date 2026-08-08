@@ -24,10 +24,15 @@ export function RestoreCard({
   savePoint,
   outcome,
   onRetry,
+  readOnly,
 }: {
   savePoint: SavePoint;
   outcome: ReconstructOutcome;
   onRetry?: () => void;
+  /** True only for the illustrative "example restore" — skips the network
+   * call a real Yes/No correction would make, since there's no real save
+   * point behind it. Never used for a genuine restore. */
+  readOnly?: boolean;
 }) {
   if (!outcome.ok) {
     return <FailureCard kind={outcome.kind} message={outcome.message} onRetry={onRetry} />;
@@ -97,6 +102,7 @@ export function RestoreCard({
               savePointId={savePoint.id}
               decisionIndex={toConfirmIndex}
               decisionText={toConfirm.text}
+              readOnly={readOnly}
             />
           )}
         </div>
@@ -113,16 +119,22 @@ function Confirm({
   savePointId,
   decisionIndex,
   decisionText,
+  readOnly,
 }: {
   savePointId: string;
   decisionIndex: number;
   decisionText: string;
+  readOnly?: boolean;
 }) {
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
 
   function respond(wasCorrect: boolean) {
     setAnswer(wasCorrect ? "yes" : "no");
-    correctDecision(savePointId, decisionIndex, wasCorrect);
+    // The example restore has no real save point behind it — reflect the
+    // tap locally only, never call the API for it.
+    if (!readOnly) {
+      correctDecision(savePointId, decisionIndex, wasCorrect);
+    }
   }
 
   return (
