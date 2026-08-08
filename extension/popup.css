@@ -64,6 +64,21 @@ input:focus {
   border-color: var(--sage);
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
 button {
   width: 100%;
   padding: 11px;

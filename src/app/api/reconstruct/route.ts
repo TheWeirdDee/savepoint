@@ -69,6 +69,18 @@ export async function POST(req: NextRequest) {
     workspaceContext: row.workspace_context ?? {},
   };
 
+  // Save Point's own public page contains a biology example. If the extension
+  // is invoked there, that interface copy is not the student's work.
+  if (
+    capture.source === "extension" &&
+    isSameOrigin(capture.activeContext?.url, req.nextUrl.origin)
+  ) {
+    capture.activeContext = {
+      title: capture.activeContext.title,
+      url: capture.activeContext.url,
+    };
+  }
+
   const { data: priorRows } = await supabase
     .from("save_points")
     .select("source, user_note, active_context, open_tabs, workspace_context")
@@ -97,7 +109,16 @@ export async function POST(req: NextRequest) {
     .limit(5);
 
   const memory: ReconstructionMemory = {
-    confirmedMemories: (memoryRows ?? []).map((item) => String(item.text)),
+    // Browser captures must stand on their own. Cross-session memory is useful
+    // in a workspace document, but on an arbitrary page it can silently import
+    // an unrelated assignment into the current objective.
+    confirmedMemories:
+      capture.source === "extension"
+        ? []
+        : relevantMemories(
+            (memoryRows ?? []).map((item) => String(item.text)),
+            capture
+          ),
     previousCapture: comparable
       ? {
           source: comparable.source as SavePointCapture["source"],
@@ -168,4 +189,52 @@ export async function POST(req: NextRequest) {
     state: outcome.state,
     savePoint: rowToSavePoint(updated),
   });
+}
+
+const MEMORY_STOP_WORDS = new Set([
+  "about", "after", "again", "been", "before", "being", "corrected", "from",
+  "have", "into", "student", "that", "their", "there", "these", "this", "those",
+  "they", "was", "were", "with",
+]);
+
+function relevantMemories(
+  memories: string[],
+  capture: SavePointCapture
+): string[] {
+  const currentText = [
+    capture.userNote,
+    capture.workspaceContext?.documentTitle,
+    capture.workspaceContext?.documentContent,
+    capture.workspaceContext?.recentEdits,
+    capture.activeContext?.title,
+    capture.activeContext?.selectedText,
+    capture.activeContext?.visibleTextSnippet,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const currentTerms = terms(currentText);
+  if (currentTerms.size === 0) return [];
+
+  return memories.filter((memory) => {
+    const overlap = [...terms(memory)].filter((term) => currentTerms.has(term));
+    return overlap.length >= 2;
+  });
+}
+
+function terms(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .match(/[a-z0-9]{4,}/g)
+      ?.filter((term) => !MEMORY_STOP_WORDS.has(term)) ?? []
+  );
+}
+
+function isSameOrigin(value: string | undefined, origin: string): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).origin === origin;
+  } catch {
+    return false;
+  }
 }

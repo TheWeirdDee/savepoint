@@ -323,7 +323,7 @@ runs exactly this repo, zero-config.
    the only place the service-role and AI-provider keys ever live.
 4. **Point the extension at production** — in the extension's Options page,
    set **Workspace address** to your deployed URL (e.g.
-   `https://savepoint-seven.vercel.app`) instead of the `http://localhost:3000`
+   `https://savepoint-seven.vercel.app`) instead of local `http://localhost:4477`
    default.
 
 Because Next.js inlines `NEXT_PUBLIC_*` variables at build time, changing
@@ -412,7 +412,9 @@ V3 extensions require desktop Chrome).
 
 Now the popup's **Save where my brain is** captures the active tab, any
 selected text, a short page snippet, and your other open tab titles — plus
-an optional note — into the username displayed in the popup. **Open workspace**
+an optional note — into the username displayed in the popup. Other open tabs
+are excluded by default and require an explicit checkbox for each save; they
+are retained as optional return links, not AI evidence. **Open workspace**
 opens that exact point under `/workspace`. The website and extension keep
 separate sessions, so their displayed usernames must match. If the extension
 session expires, the popup drops back to the login form automatically.

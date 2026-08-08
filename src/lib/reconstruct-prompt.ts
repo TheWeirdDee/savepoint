@@ -9,7 +9,9 @@ export const RECONSTRUCT_SYSTEM = `You are the reconstruction engine inside Save
 
 Your job is NOT to summarize a document. Your job is to reconstruct the student's COGNITIVE STATE — the thread of thought they were holding — so they can step back into the work with the smallest possible effort.
 
-You receive an incomplete, messy snapshot: an optional note the student left, the document they were working on, text they had selected, the page they were on, and the titles of other open tabs. Real snapshots are often sparse. Reason carefully from whatever is present. Never pad thin evidence into a confident story.
+You receive an incomplete, messy snapshot: an optional note the student left, the document they were working on, text they had selected, and the active page. Real snapshots are often sparse. Reason carefully from whatever is present. Never pad thin evidence into a confident story.
+
+CURRENT SESSION PRECEDENCE: reconstruct the current session only. The student's current note is the strongest statement of their current objective. Then use selected or recent writing and document content, then the active page. Prior memory and previous snapshots must never introduce a topic, assignment, goal, or next step that is not supported by the CURRENT RAW SNAPSHOT. If current signals conflict with older context, current signals win.
 
 You return a single JSON object and nothing else — no prose, no code fences, no commentary.
 
@@ -27,9 +29,9 @@ LOW-CONTEXT PATH: if the snapshot is too thin to reconstruct honestly (e.g. only
 
 OPEN THREADS: mark AT MOST ONE thread "primary" — the single most important other thing the student was holding in mind besides the main thread. Everything else is "supporting" or "uncertain". This is a hard cap of one; if several things seem equally important, pick the one most likely to interrupt their focus if left unresolved.
 
-EVIDENCE RECEIPTS: every objective, stoppingPoint, mainThread, decision, and nextAction must include an "evidence" array with at most two short items. Evidence is input provenance, never hidden reasoning. It must be a real excerpt of at most 140 characters from the provided capture. Allowed sources: "note", "recent-writing", "selection", "active-page", "open-tab". Never cite previous AI output or user memory as evidence. Never fabricate or paraphrase an excerpt. If a claim is not grounded in a provided signal, return an empty evidence array and lower that field's confidence.
+EVIDENCE RECEIPTS: every objective, stoppingPoint, mainThread, decision, and nextAction must include an "evidence" array with at most two short items. Evidence is input provenance, never hidden reasoning. It must be a real excerpt of at most 140 characters from the provided capture. Allowed sources: "note", "recent-writing", "selection", "active-page". Never cite other tabs, previous AI output, previous snapshots, or user memory as evidence. Never fabricate or paraphrase an excerpt. If a claim is not grounded in a provided current-session signal, return an empty evidence array and lower that field's confidence.
 
-STUDENT-CONFIRMED MEMORY: statements supplied below were explicitly confirmed or typed by the student. They outrank every model inference. Never contradict or override them.
+STUDENT-CONFIRMED MEMORY: statements supplied below were explicitly confirmed or typed by the student and have already been filtered for possible relevance. Use them only as constraints on matching current evidence. They are not evidence of the current task and must never create or change the current objective, stopping point, main thread, open threads, or next action by themselves.
 
 CONTINUITY: if a PREVIOUS RAW SNAPSHOT is supplied for the same document or URL, compare it with the current raw snapshot and return 2 to 4 short "whatChanged" items. Describe only changes directly supported by those snapshots: progress, changed decisions, or still-open threads. If no previous raw snapshot is supplied, or comparison would be speculative, return an empty array.
 
@@ -84,17 +86,9 @@ export function buildReconstructUserMessage(
     parts.push(`SNIPPET FROM THE PAGE:\n${truncate(ac.visibleTextSnippet.trim(), 1500)}`);
   }
 
-  if (capture.openTabs && capture.openTabs.length > 0) {
-    const tabs = capture.openTabs
-      .slice(0, 15)
-      .map((t) => `- ${t.title} (${t.url})`)
-      .join("\n");
-    parts.push(`OTHER OPEN TABS:\n${tabs}`);
-  }
-
   if (memory?.confirmedMemories.length) {
     parts.push(
-      `USER-CONFIRMED MEMORY (the student stated these; never contradict or override them):\n${memory.confirmedMemories
+      `POSSIBLY RELEVANT USER-CONFIRMED MEMORY (constraint only; never evidence of the current task):\n${memory.confirmedMemories
         .slice(0, 5)
         .map((item) => `- ${item}`)
         .join("\n")}`
@@ -104,7 +98,7 @@ export function buildReconstructUserMessage(
   if (memory?.previousCapture) {
     const previous = memory.previousCapture;
     parts.push(
-      `PREVIOUS RAW SNAPSHOT FOR THE SAME WORK:\nStudent note: ${previous.userNote ?? "(none)"}\nDocument title: ${previous.workspaceContext?.documentTitle ?? "(none)"}\nDocument content: ${truncate(previous.workspaceContext?.documentContent ?? "", 2500)}\nRecent writing: ${truncate(previous.workspaceContext?.recentEdits ?? "", 800)}\nActive page: ${previous.activeContext?.title ?? ""} ${previous.activeContext?.url ?? ""}\nSelected text: ${truncate(previous.activeContext?.selectedText ?? "", 500)}\nOpen tabs: ${previous.openTabs?.slice(0, 8).map((tab) => tab.title).join("; ") || "(none)"}`
+      `PREVIOUS RAW SNAPSHOT FOR CONTINUITY ONLY — NEVER CURRENT-TASK EVIDENCE:\nStudent note: ${previous.userNote ?? "(none)"}\nDocument title: ${previous.workspaceContext?.documentTitle ?? "(none)"}\nDocument content: ${truncate(previous.workspaceContext?.documentContent ?? "", 2500)}\nRecent writing: ${truncate(previous.workspaceContext?.recentEdits ?? "", 800)}\nActive page: ${previous.activeContext?.title ?? ""} ${previous.activeContext?.url ?? ""}\nSelected text: ${truncate(previous.activeContext?.selectedText ?? "", 500)}`
     );
   }
 

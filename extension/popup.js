@@ -34,6 +34,12 @@ function showAccount(user) {
   document.getElementById("saved-account-label").textContent = text;
 }
 
+async function showCurrentPage() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  document.getElementById("current-page-label").textContent =
+    "Current page: " + (tab?.title || tab?.url || "Unavailable");
+}
+
 async function refreshAccount(apiBase, token) {
   if (!token) return null;
   try {
@@ -104,7 +110,7 @@ function collectFromPage() {
   return { selection, meta, snippet };
 }
 
-async function captureActiveContext() {
+async function captureActiveContext(includeOpenTabs) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let page = { selection: "", meta: "", snippet: "" };
   try {
@@ -117,11 +123,14 @@ async function captureActiveContext() {
     // Some pages (chrome://, store) block scripting — degrade gracefully.
   }
 
-  const windowTabs = await chrome.tabs.query({ currentWindow: true });
-  const openTabs = windowTabs
-    .filter((t) => t.url && !t.url.startsWith("chrome"))
-    .map((t) => ({ title: t.title || "", url: t.url || "" }))
-    .slice(0, 15);
+  let openTabs = [];
+  if (includeOpenTabs) {
+    const windowTabs = await chrome.tabs.query({ currentWindow: true });
+    openTabs = windowTabs
+      .filter((t) => t.id !== tab.id && t.url && !t.url.startsWith("chrome"))
+      .map((t) => ({ title: t.title || "", url: t.url || "" }))
+      .slice(0, 15);
+  }
 
   return {
     activeContext: {
@@ -142,7 +151,12 @@ async function save() {
 
   show("saving");
   try {
-    const { activeContext, openTabs } = await captureActiveContext();
+    const wantsTabs = document.getElementById("include-tabs").checked;
+    const includeOpenTabs = wantsTabs
+      ? await chrome.permissions.request({ permissions: ["tabs"] })
+      : false;
+    const { activeContext, openTabs } =
+      await captureActiveContext(includeOpenTabs);
     const note = document.getElementById("note").value.trim();
 
     const capture = {
@@ -176,6 +190,7 @@ async function save() {
     await chrome.storage.local.set({ lastSavePointId: savePointId });
     const { user } = await getConfig();
     showAccount(user);
+    document.getElementById("include-tabs").checked = false;
     show("saved");
   } catch (error) {
     document.getElementById("error-text").textContent =
@@ -193,6 +208,7 @@ async function init() {
     resolvedUser = await refreshAccount(apiBase, token);
   }
   showAccount(resolvedUser);
+  await showCurrentPage();
   show(token ? "ready" : "login");
 
   document.getElementById("login-submit").addEventListener("click", login);

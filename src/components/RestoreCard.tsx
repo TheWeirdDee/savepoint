@@ -83,7 +83,7 @@ export function RestoreCard({
             {savePoint.openTabs.length > 0 && (
               <details className="mt-4 text-sm text-ink-soft">
                 <summary className="cursor-pointer underline decoration-line underline-offset-4">
-                  Open up to 3 related pages
+                  Other pages captured with this save
                 </summary>
                 <ul className="mt-3 space-y-2">
                   {savePoint.openTabs.slice(0, 3).map((tab) => (
@@ -154,6 +154,15 @@ export function RestoreCard({
 
       <div className="px-8 pb-8 sm:px-10">
         <MoreContext savePoint={savePoint} reconstruction={reconstruction} />
+        {onRetry && !readOnly && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-5 text-sm font-bold text-sage underline underline-offset-2"
+          >
+            Reconstruct again from the saved signals
+          </button>
+        )}
       </div>
     </article>
   );

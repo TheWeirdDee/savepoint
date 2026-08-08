@@ -109,6 +109,12 @@ export default function DocsPage() {
               returns to its login form.
             </p>
             <p className="mt-4">
+              Only the active page is captured by default.{" "}
+              <strong className="text-ink">Include other open tabs</strong> is
+              optional and off for every save; those pages are retained only as
+              links and are not used to invent the current task.
+            </p>
+            <p className="mt-4">
               Production defaults to <code className="rounded bg-mist px-1.5 py-0.5 text-ink">https://savepoint-seven.vercel.app</code>;
               local development uses <code className="rounded bg-mist px-1.5 py-0.5 text-ink">http://localhost:4477</code>.
               If you need to switch,

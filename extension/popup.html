@@ -28,8 +28,14 @@
       <section id="ready" class="hidden">
         <p class="title">Save where my brain is</p>
         <p class="muted" id="account-label"></p>
+        <p class="muted" id="current-page-label"></p>
         <label class="muted" for="note">Add one thought (optional)</label>
         <input id="note" placeholder="e.g. checking which source is more reliable" />
+        <label class="checkbox-row" for="include-tabs">
+          <input id="include-tabs" type="checkbox" />
+          <span>Include other open tabs</span>
+        </label>
+        <p class="muted">Off by default. The current page is always included.</p>
         <button id="save" class="primary">Save my place</button>
         <p class="muted center" style="margin-top: 12px;">
           <a href="#" id="logout-link">Log out</a>
