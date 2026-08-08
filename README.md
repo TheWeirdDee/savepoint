@@ -4,7 +4,7 @@
 
 🔗 **Live:** [savepoint-seven.vercel.app](https://savepoint-seven.vercel.app/)
 
-An AI re-entry tool for neurodivergent (primarily ADHD) K–12 students. Save
+An AI re-entry tool for neurodivergent (primarily ADHD). Save
 Point captures a lightweight snapshot of a study session in one deliberate
 tap, then later reconstructs *where you were, what you'd already figured
 out, and the single next action to resume* — leading with that action,
